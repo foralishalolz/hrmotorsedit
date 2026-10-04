@@ -24,7 +24,9 @@ New failure cases include:
 
 `tests/run_browser.py` starts an isolated disposable database. `tests/browser.mjs` exercises real forms, showroom booking → invoice → receipt, a lost payment response, encrypted offline reload, sync, and a conflicting edit from a second device. It captures desktop and phone screenshots, checks phone overflow and browser exceptions.
 
-The current workspace could not launch Chromium (SIGTRAP); **no local visual acceptance is claimed**. GitHub Actions runs this browser test on Ubuntu and builds/health-checks the production container. Check the workflow on the exact commit being deployed; results are not implied by this document.
+GitHub Actions [run 37200204530](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37200204530), for application commit `d6d3db0f4d390e466200aece69106589c724fd49`, passed all three jobs: business rules, browser and container. The real Chromium browser run completed **17 assertions with no uncaught exceptions**. It exercised lost payment responses, encrypted offline reload, reconnection and a competing edit; desktop and phone screenshots were inspected. The container built, served its health endpoint, and its Caddy configuration validated.
+
+Local Chromium could not launch in the restricted workspace, so browser evidence came from that CI run. Screenshot review led to a final refinement: one dismissible notification and a stacked bill editor on phones. The browser suite now includes an additional phone-billing assertion; consult the latest PR check for subsequent commits. A CI pass does not replace live server recovery, staff-device and pilot acceptance.
 
 ```sh
 python3 -m unittest -v

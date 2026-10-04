@@ -57,6 +57,7 @@ try{
   await nav('vehicles');await formSave('vehicles',{name:'Fictional City EV · Premium',vin:'PILOT-CHASSIS-001',color:'Pearl white',model_year:'2026',sale_price:'4200000',purchase_cost:'3800000',location:'Main showroom'});
   state=await api('state?business='+bid);const vehicle=state.records.vehicles[0];
   check(vehicle.vin==='PILOT-CHASSIS-001','Vehicle did not persist');
+  await page.getByRole('button',{name:'Dismiss notification'}).click();
   await page.screenshot({path:path.join(out,'vehicle-inventory-desktop.png'),fullPage:true});
   await nav('pipeline');await formSave('leads',{name:'Sita · City EV enquiry',customer_id:customer.id,vehicle_id:vehicle.id,expected_value:'4200000',next_action:'Confirm test drive and finance documents'});
   state=await api('state?business='+bid);let lead=state.records.leads[0];
@@ -104,11 +105,19 @@ try{
   check((await page.locator('textarea').last().inputValue()).includes('other-device-edit'),'Conflict review did not show server version');
   await page.getByRole('button',{name:'Discard this rejected change'}).click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
   state=await api('state?business='+bid);check(state.records.customers.find(x=>x.id===customer.id).phone==='other-device-edit','Conflict overwrote server data');
-  await nav('today');await page.screenshot({path:path.join(out,'dashboard-desktop.png'),fullPage:true});
+  await nav('today');await page.getByRole('button',{name:'Dismiss notification'}).click();await page.screenshot({path:path.join(out,'dashboard-desktop.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'dashboard-phone.png'),fullPage:true});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Phone dashboard overflows viewport');
+  await page.getByRole('button',{name:'+ New bill',exact:true}).click();
+  await page.locator('#field-customer_id').selectOption(customer.id);
+  await page.locator('[data-col="description"]').fill('Phone-entered service');
+  await page.locator('[data-col="rate"]').fill('500');
+  await page.locator('#document-totals').getByText('500.00',{exact:false}).first().waitFor();
+  check(await page.locator('.line-table').evaluate(x=>x.scrollWidth<=window.innerWidth),'Phone bill editor requires horizontal scrolling');
+  await page.screenshot({path:path.join(out,'billing-phone.png'),fullPage:true});
+  await close();
   check(errors.length===0,'Browser exceptions: '+errors.join('; '));
   await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui']},null,2));
   console.log(JSON.stringify({checks,errors,output:out}));
 }catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});console.error(error);console.error('PAGE ERRORS',errors);process.exitCode=1;}
-finally{await context.close();await browser.close();}
+finally{if(process.env.DESK_AGENT_BROWSER)await promisify(execFile)(process.env.DESK_AGENT_BROWSER,['close'],{timeout:10000}).catch(()=>{});await context.close().catch(()=>{});await browser.close();}

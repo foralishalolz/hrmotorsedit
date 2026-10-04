@@ -5,8 +5,8 @@ This release is a pilot candidate, not a blanket claim that every SME workflow o
 | Gate | Required evidence | Current state |
 |---|---|---|
 | Financial and inventory rules | Passing tests for rounding, credits, duplicate retries, reservations, stock and payroll | 43 local tests passed; CI must pass on the deployment commit |
-| Real browser flows | Setup, billing, offline reload, conflicts, phone layout, no uncaught exceptions | Automated test committed; local Chromium could not launch; inspect GitHub CI evidence |
-| Hosted runtime | Container builds, health check passes, HTTPS proxy config validates | Config and CI checks included; no live server/domain provisioned |
+| Real browser flows | Setup, billing, offline reload, conflicts, phone layout, no uncaught exceptions | Real Chromium checks passed in CI; desktop/phone screenshots inspected; see exact-commit checks in PR #1 |
+| Hosted runtime | Container builds, health check passes, HTTPS proxy config validates | Container build/health and proxy validation passed in CI; no live server/domain provisioned |
 | Recovery | Encrypted offsite backup and a timed restore to a separate instance | Local backups/restore implemented; offsite destination and drill required |
 | Organisation isolation | Separate customer stacks, restricted owners, role checks on staff devices | Separate-instance model documented; deployment/operator checks required |
 | Nepal billing acceptance | Accountant validates applicable bill fields, fiscal numbering, retention and required IRD/CBMS approvals | No tax-software approval or integration claimed |
