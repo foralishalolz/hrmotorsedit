@@ -1,0 +1,12 @@
+{
+  "id": "/",
+  "name": "Business Desk",
+  "short_name": "Business Desk",
+  "description": "Billing, stock, work and follow-ups for local businesses.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f5",
+  "theme_color": "#152c3c",
+  "icons": [{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+}

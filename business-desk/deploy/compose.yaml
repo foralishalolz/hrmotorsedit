@@ -1,0 +1,51 @@
+services:
+  desk:
+    build: ..
+    restart: unless-stopped
+    init: true
+    environment:
+      DESK_PUBLIC_ORIGIN: https://${SITE_HOST:?Run configure.py first}
+      DESK_SETUP_KEY: ${DESK_SETUP_KEY:?Run configure.py first}
+      # Only Caddy can reach this private service; there is no published port.
+      DESK_TRUSTED_PROXY: '*'
+    volumes:
+      - desk_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 768m
+    pids_limit: 128
+    networks:
+      - private
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      SITE_HOST: ${SITE_HOST:?Run configure.py first}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      desk:
+        condition: service_healthy
+    networks:
+      - private
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+volumes:
+  desk_data:
+  caddy_data:
+  caddy_config:
+networks:
+  private:

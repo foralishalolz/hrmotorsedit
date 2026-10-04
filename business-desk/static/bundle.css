@@ -1,0 +1,1 @@
+@media print { .bundle main:not(:last-child) { break-after: page; } }

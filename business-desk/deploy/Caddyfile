@@ -1,0 +1,9 @@
+{$SITE_HOST} {
+    encode zstd gzip
+    request_body {
+        max_size 145MB
+    }
+    reverse_proxy desk:8080 {
+        header_up Host {host}
+    }
+}
