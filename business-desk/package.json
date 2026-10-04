@@ -1,0 +1,14 @@
+{
+  "name": "business-desk-verification",
+  "version": "2.0.0-rc.1",
+  "private": true,
+  "description": "Development-only browser verification; no Node runtime is needed by the app.",
+  "scripts": {
+    "test:browser": "python3 tests/run_browser.py",
+    "check": "node --check static/app.js && node --check static/workspace.js && node --check static/sync.js"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "agent-browser": "0.27.0"
+  }
+}

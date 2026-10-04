@@ -1,0 +1,11 @@
+data
+__pycache__
+*.sqlite3*
+*.pyc
+.env*
+node_modules
+test*
+tmp*
+deploy
+docs
+verification
