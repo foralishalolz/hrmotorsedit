@@ -1,10 +1,10 @@
 # Verification
 
-Release candidate: 2.0.0-rc.1.
+Release candidate: 2.1.0-rc.1.
 
 ## Completed locally
 
-`python3 -m unittest -q`: **43 tests passed**. Covers quotation approvals and snapshots, decimal VAT and credit rounding, receipts and advance allocation, inventory, payroll and commissions, business and role isolation, attachment/backup recovery, CSRF and Host checks, and the new pilot workflows.
+`python3 -m unittest -q`: **63 tests passed**. Covers quotation approvals and snapshots, decimal VAT and credit rounding, receipts and advance allocation, inventory, payroll and commissions, business and role isolation, attachment/backup recovery, CSRF and Host checks, and the new pilot workflows.
 
 New failure cases include:
 
@@ -36,3 +36,7 @@ python3 tests/run_browser.py
 ```
 
 See `docs/RELEASE_GATES.md` for operational and business acceptance still required before a production rollout.
+
+## 2.1 additions
+
+Twenty additional backend tests cover India GST components, included tax and percentage cess, financial-year numbering, retained print snapshots, registration/HSN/address checks, e-invoice blocking, currency immutability, customer terms/custom fields, unique barcodes and partial line returns/stock rollback/permissions. The browser suite now adds all four profile workspaces, Indian onboarding, barcode catalogue billing, customer discount/terms, line return, custom fields, command search and mobile quick billing. Exact current-commit CI results are recorded in the release pull request.

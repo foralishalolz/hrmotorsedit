@@ -1,6 +1,6 @@
-# Business Desk · 2.0.0-rc.1
+# Business Desk · 2.1.0-rc.1
 
-A local or privately hosted business workspace for garages, vehicle showrooms, retailers and service businesses in Nepal. This is a controlled pilot candidate; finish the [release gates](docs/RELEASE_GATES.md) before operating it as a production service.
+A local or privately hosted business workspace for garages, vehicle showrooms, retailers and service businesses in Nepal and India. This is a controlled pilot candidate; finish the [release gates](docs/RELEASE_GATES.md) before operating it as a production service.
 
 ## Start locally
 
@@ -11,6 +11,18 @@ python3 server.py --open
 ```
 
 Open `http://127.0.0.1:8765`, create your owner account, and choose a business profile. Local mode binds to this computer only and does not need an internet connection. Your database is in `data/business-desk.sqlite3`. Keep the server window open.
+
+## New in this candidate
+
+- Country-aware Nepal/NPR and India/INR setup, domestic GST components, HSN/SAC, percentage cess and April–March Indian numbering. No government filing or IRP integration is claimed.
+- Business name/colour, speciality, work checklists and up to 20 custom fields for customers, work orders, enquiries and assets.
+- Customer relationship timeline, tags, language/contact preferences, agreed discounts and payment terms, and dynamic customer segments.
+- Quick catalogue billing with SKU/barcode input, customer terms and an explicit invoice review.
+- Retained line returns/credits with quantity limits, original tax allocation and optional direct-sale stock return. Cash refunds remain separate entries.
+- A consistent SVG icon set, mobile navigation and Ctrl/Command K command search.
+- **Free pilot — no charges, automatic conversion or payment-card collection.**
+
+Read the [India/Nepal product research](docs/INDIA_NEPAL_PRODUCT_RESEARCH.md) and [client discovery worksheet](docs/CLIENT_DISCOVERY_QUESTIONNAIRE.md).
 
 ## Your daily workspace
 
@@ -64,8 +76,10 @@ python3 admin.py --data-dir ./data reset-password --username your-user
 - Nepal tax software approval/CBMS integration is not implemented or claimed. AD dates drive reminders; BS dates and fiscal labels are entered manually. Validate invoice fields, numbering and retention for the actual business before live VAT billing.
 - Payroll tax/SSF/contribution calculations are not a statutory payroll engine. Configure and review the applicable figures.
 - This is an operational subledger, not a complete double-entry accounting package or a bank reconciliation system.
+- Indian export/SEZ/reverse-charge, fixed-amount cess, used-vehicle margin schemes, GST return filing, IRN/e-way bills and statutory payroll are not implemented. GSTIN checks validate format and state, not active registration. Marking e-invoicing as required blocks invoice issuance until integration is available.
 - Supplier credit notes/returns, vehicle resale after an issued sale, and progress invoicing against one job need additional workflows. Supplier bill/payment corrections currently require controlled administrator/accountant review; do not silently delete ledger records.
 - SMS/WhatsApp/email sending, bank/wallet payment processing, finance-provider APIs, manufacturer dealer-system integration and automatic subscription charging are not implemented.
+- Interface text is English. A client’s preferred contact language is stored but does not translate the entire application. Keyboard barcode input is supported; camera scanning and hardware printer integrations are not included.
 - Multi-tenant SaaS billing, self-service customer provisioning, device conflict merging and independently operating local-server/cloud-server replication are not included.
 - The available older quotation repository was used as a migration reference. Exact feature parity with the newer hosted preview has not been verified.
 
@@ -77,5 +91,7 @@ npm ci
 npx playwright install --with-deps chromium
 python3 tests/run_browser.py
 ```
+
+The expanded checks exercise all four profiles, India billing/returns, customer terms and custom fields as well as the existing offline/retry flows.
 
 Node/Playwright are development-only dependencies. Local operation uses the Python standard library; private hosting adds the pinned Waitress dependency. See [verification](VERIFICATION.md), [security](SECURITY.md), and the [market and pilot plan](docs/MARKET_AND_PILOT.md).

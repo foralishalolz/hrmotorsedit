@@ -150,6 +150,7 @@ class BusinessFeatures:
                 raise Problem('Reserve the available vehicle before creating its invoice.')
             quote = next((x for x in records['quotes'] if x.get('lead_id') == rid and x.get('status') == 'accepted'), None)
             item = {'description': vehicle['name'] + ' · VIN ' + vehicle['vin'] if vehicle else record['name'],
+                    'hsn_sac': (vehicle or {}).get('hsn_sac', ''), 'tax_rate': (vehicle or {}).get('tax_rate', business.get('vat_rate',13)), 'cess_rate': (vehicle or {}).get('cess_rate',0),
                     'qty': 1, 'unit': 'vehicle' if vehicle else 'service', 'rate': vehicle['sale_price'] if vehicle else record.get('expected_value', 0)}
             result = self.put(conn, bid, kind, {'customer_id': record['customer_id'], 'lead_id': rid,
                 'vehicle_id': (vehicle or {}).get('id', ''), 'subject': record['name'], 'status': 'draft', 'date': today(),
@@ -219,8 +220,9 @@ class BusinessFeatures:
         for vehicle in records['vehicles']:
             vehicle['_age_days'] = max(0, (date.today() - date.fromisoformat(vehicle['date'])).days) if vehicle.get('date') else 0
 
-    def business_alerts(self, records):
-        from domain import today
+    def business_alerts(self, records, business=None):
+        from regional import business_today
+        today = lambda: business_today(business)
         alerts = []
         def add(kind, record, title, detail, step, priority=2):
             alerts.append({'key': kind + ':' + record['id'], 'priority': priority, 'title': title,

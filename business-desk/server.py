@@ -25,10 +25,11 @@ if sys.version_info < (3,10):
     raise SystemExit('Business Desk requires Python 3.10 or newer. Install it from https://www.python.org/downloads/')
 
 from domain import Desk, Problem, calculate, today, words, password_hash, password_ok
+from regional import INDIA_STATES, business_today
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
-APP_VERSION = '2.0.0-rc.1'
+APP_VERSION = '2.1.0-rc.1'
 
 
 def escaped(value):
@@ -50,7 +51,10 @@ def print_document(desk, user, bid, kind, rid, style='classic', font='11'):
         record = next(x for x in records[kind] if x['id'] == rid)
         customer = record.get('customer_snapshot') or next((x for x in records['customers'] if x['id'] == record.get('customer_id')), {})
         asset = record.get('asset_snapshot') or next((x for x in records['assets'] if x['id'] == record.get('asset_id')), {})
-    title = {'quotes':'QUOTATION','invoices':'VAT INVOICE' if record.get('vat_mode')!='none' else 'INVOICE',
+    currency = business.get('currency', 'NPR')
+    indian = business.get('country') == 'IN'
+    tax_label = 'GST' if indian else 'VAT'
+    title = {'quotes':'QUOTATION','invoices':record.get('document_title') or ('VAT INVOICE' if record.get('vat_mode')!='none' else 'INVOICE'),
              'external_quotes':'EXTERNAL QUOTATION RECORD','payments':'REFUND VOUCHER' if record.get('direction')=='refund' else 'PAYMENT RECEIPT',
              'credits':'CREDIT NOTE','jobs':'JOB CARD','purchases':'PURCHASE ORDER','payroll':'PAYROLL REGISTER'}.get(kind)
     if not title: raise Problem('A print layout is not available for this record.')
@@ -61,10 +65,11 @@ def print_document(desk, user, bid, kind, rid, style='classic', font='11'):
     if record.get('status')=='draft': warning='<div class="stamp">DRAFT · Review before issuing</div>'
     if kind=='external_quotes':
         warning = '<div class="stamp">HYPOTHETICAL COMPARISON · NOT A THIRD-PARTY QUOTATION</div>' if record.get('simulation') else '<div class="stamp">TRANSCRIBED COMPARISON · See the original issuer document</div>'
-    company = '<h1>'+escaped(business.get('name','Business Desk'))+'</h1><p>'+escaped(business.get('address',''))+'</p><p>'+escaped(business.get('phone',''))+' '+escaped(business.get('email',''))+'</p><p>PAN / VAT: '+escaped(business.get('pan','—'))+'</p>'
+    company = '<h1>'+escaped(business.get('name','Business Desk'))+'</h1><p>'+escaped(business.get('address',''))+'</p><p>'+escaped(business.get('phone',''))+' '+escaped(business.get('email',''))+'</p><p>'+('GSTIN: '+escaped(business.get('gstin','—')) if indian else 'PAN / VAT: '+escaped(business.get('pan','—')))+'</p>'
     if kind=='external_quotes': company='<h1>'+escaped(record.get('issuer','Comparison scenario'))+'</h1><p>Reference recorded by '+escaped(business.get('name'))+'</p>'
-    heading = '<header><div>'+company+'</div><div class="document"><h2>'+title+'</h2><p>'+escaped(record.get('number') or record.get('reference') or 'Unnumbered draft')+'</p><p>AD: '+escaped(record.get('date') or today())+'</p>'
+    heading = '<header><div>'+company+'</div><div class="document"><h2>'+title+'</h2><p>'+escaped(record.get('number') or record.get('reference') or 'Unnumbered draft')+'</p><p>AD: '+escaped(record.get('date') or business_today(business))+'</p>'
     if record.get('bs_date'): heading+='<p>BS: '+escaped(record['bs_date'])+' (entered)</p>'
+    if record.get('financial_year'): heading+='<p>Financial year: '+escaped(record['financial_year'][:2]+'–'+record['financial_year'][2:])+'</p>'
     if business.get('fiscal_label'): heading+='<p>Fiscal year: '+escaped(business['fiscal_label'])+'</p>'
     if record.get('revision'): heading+='<p>Revision '+escaped(record['revision'])+'</p>'
     heading+='</div></header>'
@@ -76,16 +81,21 @@ def print_document(desk, user, bid, kind, rid, style='classic', font='11'):
     if asset.get('registration'): context+='<p>Registration / ID: '+escaped(asset['registration'])+'</p>'
     if asset.get('chassis') and record.get('show_chassis',True): context+='<p>Chassis / Serial: '+escaped(asset['chassis'])+'</p>'
     if record.get('due_date'): context+='<p>Due: '+escaped(record['due_date'])+'</p>'
+    if indian:
+        context+='<p>GSTIN: '+escaped(customer.get('gstin') or 'Unregistered')+'</p><p>Place of supply: '+escaped(record.get('place_of_supply', business.get('state_code','')))+' · '+escaped(INDIA_STATES.get(record.get('place_of_supply', business.get('state_code','')), ''))+'</p><p>Reverse charge: No · Domestic forward charge</p>'
+        if business.get('gst_registration') == 'composition': context+='<p>Composition taxable person, not eligible to collect tax on supplies.</p>'
     context+='</div></section>'
     rows=''; totals=''; extra=''
     if kind in ('quotes','invoices','external_quotes'):
         computed=record['_totals']
         for i,x in enumerate(computed['lines'],1):
-            rows+='<tr><td>'+str(i)+'</td><td class="description">'+escaped(x['description'])+'</td><td>'+escaped(x['qty'])+'</td><td>'+escaped(x.get('unit','pc'))+'</td><td class="num">'+cash(x['rate'])+'</td><td class="num">'+cash(x['discount_amount'])+'</td><td class="num">'+cash(x['net'])+'</td><td class="num">'+cash(x['tax'])+'</td><td class="num">'+cash(x['total'])+'</td></tr>'
-        table='<table><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Discount</th><th>Net</th><th>VAT</th><th>Total</th></tr></thead><tbody>'+rows+'</tbody></table>'
-        totals='<div class="totals"><p><span>Net amount</span><b>NPR '+cash(computed['net'])+'</b></p><p><span>VAT ('+escaped(record.get('vat_mode','added'))+')</span><b>NPR '+cash(computed['tax'])+'</b></p><p class="grand"><span>Total</span><b>NPR '+cash(computed['total'])+'</b></p>'
+            rows+='<tr><td>'+str(i)+'</td><td class="description">'+escaped(x['description'])+('<br><small>HSN / SAC: '+escaped(x.get('hsn_sac',''))+'</small>' if indian else '')+'</td><td>'+escaped(x['qty'])+'</td><td>'+escaped(x.get('unit','pc'))+'</td><td class="num">'+cash(x['rate'])+'</td><td class="num">'+cash(x['discount_amount'])+'</td><td class="num">'+cash(x['net'])+'</td><td class="num">'+(escaped(x.get('tax_rate',0))+'% / ' if indian else '')+cash(x['tax'])+'</td><td class="num">'+cash(x['total'])+'</td></tr>'
+        table='<table><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Discount</th><th>Net</th><th>'+tax_label+' rate / amount</th><th>Total</th></tr></thead><tbody>'+rows+'</tbody></table>'
+        totals='<div class="totals"><p><span>Net amount</span><b>'+currency+' '+cash(computed['net'])+'</b></p><p><span>'+tax_label+' ('+escaped(record.get('vat_mode','added'))+')</span><b>'+currency+' '+cash(computed['tax'])+'</b></p><p class="grand"><span>Total</span><b>'+currency+' '+cash(computed['total'])+'</b></p>'
+        for component, value in computed.get('tax_components', {}).items():
+            totals+='<p><span>'+escaped(component)+'</span><b>'+currency+' '+cash(value)+'</b></p>'
         if kind=='invoices' and record.get('status')=='issued':
-            totals+='<p><span>Credits</span><b>'+cash(record['_credited'])+'</b></p><p><span>Net receipts / allocations</span><b>'+cash(record['_paid'])+'</b></p><p><span>Outstanding / (credit)</span><b>NPR '+cash(record['_balance'])+'</b></p>'
+            totals+='<p><span>Credits</span><b>'+cash(record['_credited'])+'</b></p><p><span>Net receipts / allocations</span><b>'+cash(record['_paid'])+'</b></p><p><span>Outstanding / (credit)</span><b>'+currency+' '+cash(record['_balance'])+'</b></p>'
         totals+='</div><p class="words">'+escaped(computed['words'])+'</p>'
         if kind=='quotes' and record.get('status')=='accepted': extra='<p>Approval recorded: '+escaped(record.get('approved_by',''))+' · '+escaped(record.get('approval_channel',''))+' · '+escaped(record.get('decision_at',''))+'</p>'
     elif kind=='payroll':
@@ -93,7 +103,7 @@ def print_document(desk, user, bid, kind, rid, style='classic', font='11'):
         for x in record['lines']:
             rows+='<tr><td>'+escaped(x['name'])+'</td><td class="num">'+cash(x['base'])+'</td><td class="num">'+cash(x['overtime']+x['bonus']+x['commission'])+'</td><td class="num">'+cash(x['gross'])+'</td><td class="num">'+cash(x['withholding']+x['deductions']+x['employee_contribution'])+'</td><td class="num">'+cash(x['net'])+'</td><td class="num">'+cash(x['employer_cost'])+'</td></tr>'
         table='<table><thead><tr><th>Employee</th><th>Base</th><th>OT / bonus / incentives</th><th>Gross</th><th>Deductions</th><th>Net pay</th><th>Employer cost</th></tr></thead><tbody>'+rows+'</tbody></table>'
-        totals='<div class="totals"><p class="grand"><span>Net payroll</span><b>NPR '+cash(record['total_net'])+'</b></p><p><span>Employer cost</span><b>NPR '+cash(record['total_cost'])+'</b></p></div>'
+        totals='<div class="totals"><p class="grand"><span>Net payroll</span><b>'+currency+' '+cash(record['total_net'])+'</b></p><p><span>Employer cost</span><b>'+currency+' '+cash(record['total_cost'])+'</b></p></div>'
         extra='<p>Rates, pay units and withholding are configured and reviewed by the owner. This register does not calculate statutory payroll tax automatically.</p>'
     elif kind=='jobs':
         for x in record.get('tasks',[]): rows+='<tr><td>'+('✓' if x.get('done') else '☐')+'</td><td>'+escaped(x.get('name',''))+'</td></tr>'
@@ -105,14 +115,17 @@ def print_document(desk, user, bid, kind, rid, style='classic', font='11'):
             item=next((y for y in records['stock'] if y['id']==x['item_id']),{})
             rows+='<tr><td>'+escaped(item.get('name','Item'))+'</td><td>'+escaped(x['qty'])+'</td><td class="num">'+cash(x['cost'])+'</td><td class="num">'+cash(float(x['qty'])*float(x['cost']))+'</td></tr>'
         table='<table><thead><tr><th>Stock item</th><th>Quantity</th><th>Unit cost</th><th>Amount</th></tr></thead><tbody>'+rows+'</tbody></table>'
-        totals='<div class="totals"><p class="grand"><span>Order total (before supplier tax)</span><b>NPR '+cash(record['total'])+'</b></p></div>'
+        totals='<div class="totals"><p class="grand"><span>Order total (before supplier tax)</span><b>'+currency+' '+cash(record['total'])+'</b></p></div>'
     else:
         invoice=next((x for x in records['invoices'] if x['id']==record.get('invoice_id')), {})
         table='<table><tbody><tr><th>Linked invoice</th><td>'+escaped(invoice.get('number') or 'Unapplied customer advance')+'</td></tr>'
         if kind=='payments': table+='<tr><th>Method / reference</th><td>'+escaped(record.get('method',''))+' · '+escaped(record.get('reference',''))+'</td></tr>'
-        else: table+='<tr><th>Reason</th><td>'+escaped(record.get('reason',''))+'</td></tr><tr><th>Net / VAT credit</th><td>NPR '+cash(record.get('net'))+' / '+cash(record.get('tax'))+'</td></tr>'
+        else: table+='<tr><th>Reason</th><td>'+escaped(record.get('reason',''))+'</td></tr><tr><th>Net / tax credit</th><td>'+currency+' '+cash(record.get('net'))+' / '+cash(record.get('tax'))+'</td></tr>'
         table+='</tbody></table>'
-        totals='<div class="totals"><p class="grand"><span>Amount</span><b>NPR '+cash(record['amount'])+'</b></p></div><p class="words">'+escaped(words(record['amount']))+'</p>'
+        if kind == 'credits' and record.get('return_lines'):
+            table+='<table><thead><tr><th>Credited item / HSN</th><th>Quantity</th><th>Net</th><th>Tax</th></tr></thead><tbody>'+''.join('<tr><td>'+escaped(x['description'])+' · '+escaped(x.get('hsn_sac',''))+'</td><td>'+escaped(x['qty'])+'</td><td>'+cash(x['net'])+'</td><td>'+cash(x['tax'])+'</td></tr>' for x in record['return_lines'])+'</tbody></table>'
+            table+='<p>'+escaped(' · '.join(k+': '+cash(v) for k,v in record.get('tax_components',{}).items()))+'</p>'
+        totals='<div class="totals"><p class="grand"><span>Amount</span><b>'+currency+' '+cash(record['amount'])+'</b></p></div><p class="words">'+escaped(words(record['amount']))+'</p>'
     terms=record.get('terms','')
     tail='<section class="notes">'+('<h3>Terms</h3><p>'+escaped(terms).replace('\n','<br>')+'</p>' if terms else '')+('<h3>Notes</h3><p>'+escaped(record['notes']).replace('\n','<br>')+'</p>' if record.get('notes') else '')+extra+'</section>'
     return ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'+escaped(title+' '+record.get('number',''))+'</title><link rel="stylesheet" href="/print.css"><style>:root{--print-size:'+str(size)+'pt}</style></head><body class="'+style+'"><nav class="printbar"><button id="print-button">Print / Save PDF</button><span>A4 · Review printer margins and preview before saving.</span></nav><main>'+warning+heading+context+table+totals+tail+'<footer><div>Prepared / authorised by<br><br>________________________</div><div>Customer / recipient<br><br>________________________</div></footer></main><script src="/print.js"></script></body></html>').encode()
@@ -200,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
             parsed=urlparse(self.path); path=parsed.path; query=parse_qs(parsed.query)
             get=lambda key,default='':query.get(key,[default])[0]
             if path=='/api/health' and not write:
-                result={'version':APP_VERSION,'setup_required':not self.desk.has_users(),'today':today()}
+                result={'version':APP_VERSION,'setup_required':not self.desk.has_users(),'today':today(),'india_states':INDIA_STATES}
                 result.update(hosted=bool(getattr(self.server, 'public_origin', '')), setup_key_required=bool(getattr(self.server, 'setup_key', '')))
                 try:
                     user,csrf=self.desk.session(self.token()); result.update(user=self.desk.user_view(user),csrf=csrf)

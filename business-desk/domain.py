@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from business import BusinessFeatures, PROFILES
+from regional import RegionalFeatures, INDIA_STATES, UTGST_STATES, business_today, financial_year
 
 NEPAL = timezone(timedelta(hours=5, minutes=45))
 KINDS = {
@@ -105,7 +106,9 @@ def calculate(data):
     mode = data.get('vat_mode', 'added')
     if mode not in ('added', 'included', 'none'):
         raise Problem('Choose VAT added, VAT included or no VAT.')
-    tax_rate = decimal(data.get('vat_rate', 13), 'VAT rate', 0, 100)
+    tax_rate = decimal(data.get('vat_rate', 13), 'Tax rate', 0, 100)
+    indian = data.get('country') == 'IN'
+    components = {}
     global_discount = decimal(data.get('discount_percent', 0), 'Overall discount', 0, 100)
     lines = []
     net = tax = total = cost = discount = Decimal(0)
@@ -126,14 +129,29 @@ def calculate(data):
         amount = money(raw * (1 - pct / 100) * (1 - global_discount / 100))
         configured_percent=decimal(item.get('tax_rate', tax_rate), 'Line tax rate', 0, 100)
         percent = configured_percent if mode != 'none' else Decimal(0)
+        cess_rate = decimal(item.get('cess_rate', 0), 'Cess rate', 0, 100) if indian and mode != 'none' else Decimal(0)
+        combined_percent = percent + cess_rate
         if mode == 'included':
-            line_net = money(amount / (1 + percent / 100))
+            line_net = money(amount / (1 + combined_percent / 100))
             line_tax = amount - line_net
             line_total = amount
         else:
             line_net = amount
-            line_tax = money(line_net * percent / 100)
+            line_tax = money(line_net * combined_percent / 100)
             line_total = line_net + line_tax
+        split = {}
+        if indian and mode != 'none':
+            seller, supply = data.get('seller_state'), data.get('place_of_supply')
+            if seller not in INDIA_STATES or supply not in INDIA_STATES:
+                raise Problem('Choose the seller state and domestic place of supply to calculate GST.')
+            cess = money(line_tax * cess_rate / combined_percent) if combined_percent else money(0)
+            gst = line_tax - cess
+            if seller == supply:
+                central = money(gst / 2)
+                split = {'CGST': number(central), 'UTGST' if seller in UTGST_STATES else 'SGST': number(gst - central)}
+            else: split = {'IGST': number(gst)}
+            if cess_rate: split['Cess'] = number(cess)
+            for key, value in split.items(): components[key] = number(money(components.get(key, 0)) + money(value))
         line_cost = money(qty * unit_cost)
         lines.append({
             **item, 'description': description, 'qty': number(qty), 'rate': number(rate),
@@ -141,6 +159,7 @@ def calculate(data):
             'configured_tax_rate': number(configured_percent),
             'net': number(line_net), 'tax': number(line_tax), 'total': number(line_total),
             'cost': number(line_cost), 'discount_amount': number(raw - amount),
+            **({'tax_components': split, 'cess_rate': number(cess_rate)} if indian else {}),
         })
         net += line_net
         tax += line_tax
@@ -149,7 +168,7 @@ def calculate(data):
         discount += raw - amount
     return {'lines': lines, 'net': number(net), 'tax': number(tax), 'total': number(total),
             'estimated_cost': number(cost), 'estimated_contribution': number(net - cost),
-            'discount': number(discount), 'words': words(total)}
+            'discount': number(discount), 'words': words(total), 'tax_components': components}
 
 
 def words(value):
@@ -192,7 +211,7 @@ def password_ok(password, stored):
         return False
 
 
-class Desk(BusinessFeatures):
+class Desk(RegionalFeatures, BusinessFeatures):
     def __init__(self, folder):
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -384,9 +403,17 @@ class Desk(BusinessFeatures):
         if user['role'] != 'owner':
             raise Problem('Only the owner can change business settings.', 403)
         data = dict(payload.get('data', {}))
+        previous = None
+        if payload.get('id'):
+            with self.connect() as conn:
+                previous = self.business(conn, payload['id'])
+                data = {**previous, **data}
+                if data.get('country', 'NP') != previous.get('country', 'NP') and any(self.records(conn, previous['id'])[k] for k in ('quotes', 'invoices', 'payments', 'stock', 'purchases', 'expenses', 'payroll')):
+                    raise Problem('Country and currency are fixed once monetary records exist. Create a separate business for another country.')
         self.configure_profile(data, bool(payload.get('id')))
         if not str(data.get('name', '')).strip():
             raise Problem('Business name is required.')
+        self.configure_region(data)
         data['vat_rate']=number(decimal(data.get('vat_rate',13),'VAT rate',0,100))
         data['print_font_size']=number(decimal(data.get('print_font_size',11),'Print font size',8,16))
         data['daily_capacity']=number(decimal(data.get('daily_capacity',8),'Daily capacity',1,10000))
@@ -401,6 +428,9 @@ class Desk(BusinessFeatures):
             if old:
                 if payload.get('version') != old['version']:
                     raise Problem('Settings changed in another window. Refresh and try again.', 409)
+                current = self.business(conn, bid)
+                if data['country'] != current.get('country', 'NP') and any(self.records(conn, bid)[k] for k in ('quotes', 'invoices', 'payments', 'stock', 'purchases', 'expenses', 'payroll')):
+                    raise Problem('Country and currency are fixed once monetary records exist. Create a separate business for another country.')
                 conn.execute('UPDATE businesses SET data=?,version=version+1 WHERE id=?', (json.dumps(data), bid))
             else:
                 conn.execute('INSERT INTO businesses(id,data) VALUES (?,?)', (bid, json.dumps(data)))
@@ -441,12 +471,16 @@ class Desk(BusinessFeatures):
                      (rid, bid, kind, json.dumps(clean, ensure_ascii=False), stamp, stamp))
         return self.record(conn, bid, rid)
 
-    def next_number(self, conn, bid, kind):
-        year = today()[:4]
+    def next_number(self, conn, bid, kind, day=None):
+        business = self.business(conn, bid)
+        day = day or business_today(business)
+        year = financial_year(day) if business.get('country') == 'IN' else day[:4]
         conn.execute('INSERT OR IGNORE INTO counters VALUES (?,?,?,0)', (bid, kind, year))
         conn.execute('UPDATE counters SET value=value+1 WHERE business_id=? AND kind=? AND year=?', (bid, kind, year))
         n = conn.execute('SELECT value FROM counters WHERE business_id=? AND kind=? AND year=?', (bid, kind, year)).fetchone()[0]
-        return f'{kind}-{year}-{n:04}'
+        result = f'{kind}-{year}-{n:04}'
+        if business.get('country') == 'IN' and len(result) > 16: raise Problem('Invoice series is full; configure a reviewed new series before continuing.')
+        return result
 
     def save(self, user, bid, kind, payload):
         self.business_allowed(user, bid)
@@ -484,6 +518,7 @@ class Desk(BusinessFeatures):
             if data.get(key):
                 self.record(conn, bid, data[key], expected)
         self.validate_business_record(conn, user, bid, kind, data, old)
+        self.validate_personalisation(conn, bid, kind, data, old)
         for key in ('date', 'due_date', 'expected_date', 'start_date', 'end_date', 'expiry_date'):
             if data.get(key):
                 checked_date(data[key], key.replace('_', ' '))
@@ -532,7 +567,7 @@ class Desk(BusinessFeatures):
             if user['role'] == 'technician':
                 if not old or user.get('employee_id') not in old.get('employee_ids', []):
                     raise Problem('You can update only your assigned jobs.', 403)
-                allowed = {'stage', 'tasks', 'notes', 'blocker'}
+                allowed = {'stage', 'tasks', 'notes', 'blocker', 'custom_fields'}
                 if any(data.get(k) != old.get(k) for k in set(data) - allowed if k not in ('id','version','type','created_at','updated_at') and not k.startswith('_')):
                     raise Problem('Technicians can update tasks, stages and work notes.', 403)
             for emp in data.get('employee_ids', []):
@@ -678,6 +713,7 @@ class Desk(BusinessFeatures):
         invoice = self.record(conn, bid, data.get('invoice_id'), 'invoices')
         if invoice.get('status') != 'issued':
             raise Problem('Credit notes require an issued invoice.')
+        if invoice.get('country') == 'IN': raise Problem('Use Return / credit items on the invoice for a line-level GST credit.')
         totals, credited, _, _ = self.invoice_values(self.records(conn, bid), invoice)
         amount = money(decimal(data.get('amount', 0), 'Credit amount', Decimal('.01')))
         if amount + credited > money(totals['total']):
@@ -731,15 +767,18 @@ class Desk(BusinessFeatures):
             elif kind == 'invoices' and action == 'issue':
                 if record.get('status','draft') != 'draft':
                     raise Problem('Invoice is already issued.', 409)
+                self.prepare_regional_document(conn, bid, record, issuing=True)
                 totals = calculate(record)
                 if not totals['lines']:
                     raise Problem('Add at least one invoice line.')
-                record.update(status='issued', number=self.next_number(conn, bid, 'INV'), issued_at=now(),
+                record.update(status='issued', number=self.next_number(conn, bid, 'INV', record.get('date')), issued_at=now(),
                               seller_snapshot=business, customer_snapshot=self.record(conn,bid,record['customer_id'],'customers'),
                               asset_snapshot=self.record(conn,bid,record['asset_id'],'assets') if record.get('asset_id') else {},
                               totals_snapshot=totals)
                 self.issue_inventory(conn, bid, record)
                 result = self.put(conn, bid, kind, record, rid)
+            elif kind == 'invoices' and action == 'return':
+                result = self.line_return(conn, user, bid, record, payload)
             elif kind == 'leads':
                 result = self.sales_action(conn, user, bid, record, action, payload, business)
             elif kind == 'jobs' and action == 'invoice':
@@ -816,6 +855,7 @@ class Desk(BusinessFeatures):
         status=record.get('status','draft')
         if action=='send':
             if status!='draft': raise Problem('Only a draft can be sent.')
+            self.prepare_regional_document(conn, bid, record)
             totals=calculate(record)
             if not totals['lines']: raise Problem('Add at least one quotation line.')
             record.update(status='sent',sent_at=now(),number=record.get('number') or self.next_number(conn,bid,'Q'),
@@ -840,8 +880,8 @@ class Desk(BusinessFeatures):
             return self.put(conn,bid,'jobs',{
                 'name':record.get('subject') or 'Service job','number':self.next_number(conn,bid,'JOB'),
                 'customer_id':record['customer_id'],'asset_id':record.get('asset_id',''),'quote_id':record['id'],
-                'date':today(),'due_date':payload.get('due_date',''),'stage':'Intake','employee_ids':[],
-                'tasks':[{'id':identifier(),'name':x['description'],'done':False} for x in record['items']],
+                'date':business_today(business),'due_date':payload.get('due_date',''),'stage':business.get('stages', ['Intake'])[0],'employee_ids':[],
+                'tasks':[{'id':identifier(),'name':x,'done':False} for x in list(dict.fromkeys([i['description'] for i in record['items']] + business.get('job_checklist', [])))],
                 'labor_cost':0,'additional_material_cost':0,'subcontract_cost':0,'notes':'','blocker':'',
             })
         return self.put(conn,bid,'quotes',record,record['id'])
@@ -1013,23 +1053,23 @@ class Desk(BusinessFeatures):
         return records
 
     def alerts(self,business,records):
-        alerts=self.business_alerts(records)
-        day=date.fromisoformat(today())
+        alerts=self.business_alerts(records, business)
+        day=date.fromisoformat(business_today(business))
         def add(key,priority,title,detail,kind,rid,next_action):
             alerts.append({'key':key,'priority':priority,'title':title,'detail':detail,'type':kind,'record_id':rid,'next_action':next_action})
         for q in records['quotes']:
             if q.get('status')=='sent' and q.get('sent_at') and (day-datetime.fromisoformat(q['sent_at']).astimezone(NEPAL).date()).days>=int(business.get('quote_followup_days',3)):
                 add('quote:'+q['id'],2,'Quotation awaiting a reply',q.get('number') or q.get('subject','Quotation'),'quotes',q['id'],'Ask whether the customer is ready to approve the quoted work.')
         for invoice in records['invoices']:
-            if invoice.get('status')=='issued' and invoice.get('_balance',0)>.009 and invoice.get('due_date') and invoice['due_date']<today():
-                add('invoice:'+invoice['id'],1,'Payment overdue',f"{invoice.get('number','Invoice')} · NPR {invoice['_balance']:,.2f} outstanding",'invoices',invoice['id'],'Confirm the outstanding amount and agree a payment date.')
+            if invoice.get('status')=='issued' and invoice.get('_balance',0)>.009 and invoice.get('due_date') and invoice['due_date']<business_today(business):
+                add('invoice:'+invoice['id'],1,'Payment overdue',f"{invoice.get('number','Invoice')} · {business.get('currency', 'NPR')} {invoice['_balance']:,.2f} outstanding",'invoices',invoice['id'],'Confirm the outstanding amount and agree a payment date.')
             if invoice.get('_balance',0)<-.009:
                 add('refund:'+invoice['id'],1,'Customer credit to resolve',invoice.get('number','Invoice'),'invoices',invoice['id'],'Review the credit and arrange an authorised refund or allocation.')
         for job in records['jobs']:
             if job.get('stage')=='Delivered': continue
             if job.get('blocker'):
                 add('blocked:'+job['id'],1,'Job needs attention',job['name']+' · '+job['blocker'],'jobs',job['id'],'Resolve the blocker or agree an updated delivery promise.')
-            elif job.get('due_date') and job['due_date']<=today():
+            elif job.get('due_date') and job['due_date']<=business_today(business):
                 add('due:'+job['id'],1,'Delivery due',job['name'],'jobs',job['id'],'Check progress, complete quality checks and confirm delivery.')
             elif not job.get('employee_ids'):
                 add('unassigned:'+job['id'],2,'Assign this job',job['name'],'jobs',job['id'],'Choose a technician or service team.')
@@ -1037,30 +1077,30 @@ class Desk(BusinessFeatures):
             if item.get('_quantity',0)<=float(item.get('reorder_at',0)):
                 add('stock:'+item['id'],2,'Stock needs replenishing',f"{item['name']} · {item['_quantity']:g} {item.get('unit','pc')} left",'stock',item['id'],'Check upcoming jobs and prepare a supplier order.')
         for claim in records['claims']:
-            if claim.get('status') not in ('settled','closed') and claim.get('due_date') and claim['due_date']<=today():
+            if claim.get('status') not in ('settled','closed') and claim.get('due_date') and claim['due_date']<=business_today(business):
                 add('claim:'+claim['id'],1,'Insurance follow-up due',claim.get('reference') or claim.get('insurer','Claim'),'claims',claim['id'],claim.get('next_action') or 'Confirm the next approval or settlement step with the insurer.')
         for order in records['purchases']:
-            if order.get('status')!='received' and order.get('expected_date') and order['expected_date']<=today():
+            if order.get('status')!='received' and order.get('expected_date') and order['expected_date']<=business_today(business):
                 add('purchase:'+order['id'],2,'Supplier delivery due',order.get('number','Purchase order'),'purchases',order['id'],'Confirm delivery and receive the actual quantity supplied.')
         for a in records['attendance']:
-            if a.get('status')=='pending' and a.get('date','')<=today():
+            if a.get('status')=='pending' and a.get('date','')<=business_today(business):
                 add('attendance:'+a['id'],3,'Attendance needs review',a.get('date',''),'attendance',a['id'],'Check missing punches and approve the correct attendance.')
         for c in records['contracts']:
-            if c.get('expiry_date') and today()<=c['expiry_date']<=(day+timedelta(days=30)).isoformat() and c.get('status')!='closed':
+            if c.get('expiry_date') and business_today(business)<=c['expiry_date']<=(day+timedelta(days=30)).isoformat() and c.get('status')!='closed':
                 add('contract:'+c['id'],2,'Contract renewal approaching',c['name'],'contracts',c['id'],'Review the agreement and prepare a renewal quotation.')
         for appointment in records['appointments']:
-            if appointment.get('date')==today() and appointment.get('status') not in ('completed','cancelled'):
+            if appointment.get('date')==business_today(business) and appointment.get('status') not in ('completed','cancelled'):
                 add('appointment:'+appointment['id'],2,'Appointment today',appointment.get('name','Appointment')+' · '+appointment.get('time',''),'appointments',appointment['id'],'Confirm arrival and prepare the service job.')
         dismiss={x.get('alert_key'):x for x in records['followups'] if x.get('alert_key')}
         filtered=[]
         for alert in alerts:
             note=dismiss.get(alert['key'])
-            if note and note.get('due_date','')>today(): continue
-            if note and note.get('status')=='completed' and note.get('date')==today(): continue
+            if note and note.get('due_date','')>business_today(business): continue
+            if note and note.get('status')=='completed' and note.get('date')==business_today(business): continue
             if note: alert['last_note']=note.get('notes','')
             filtered.append(alert)
         for task in records['followups']:
-            if not task.get('alert_key') and task.get('status','open')!='completed' and task.get('due_date','')<=today():
+            if not task.get('alert_key') and task.get('status','open')!='completed' and task.get('due_date','')<=business_today(business):
                 add_task={'key':'manual:'+task['id'],'priority':2,'title':task.get('name','Follow-up'),
                     'detail':task.get('notes',''),'type':'followups','record_id':task['id'],'next_action':task.get('next_action','Complete the planned follow-up.')}
                 filtered.append(add_task)
@@ -1093,8 +1133,8 @@ class Desk(BusinessFeatures):
             audit=[dict(x) for x in conn.execute('SELECT * FROM audit WHERE business_id=? ORDER BY id DESC LIMIT 60',(bid,))] if user['role']=='owner' else []
             epoch = conn.execute("SELECT value FROM meta WHERE key='data_epoch'").fetchone()[0]
         return {'business':business,'records':records,'alerts':self.alerts(business,records),'attachments':attachments, 'data_epoch':epoch,
-                'profiles':PROFILES,
-                'audit':audit,'today':today(),'stages':business.get('stages') or STAGES,'permissions':{'read':sorted(allowed),'write':sorted(ROLE_WRITE[user['role']])}}
+                'profiles':PROFILES, 'india_states':INDIA_STATES,
+                'audit':audit,'today':business_today(business),'stages':business.get('stages') or STAGES,'permissions':{'read':sorted(allowed),'write':sorted(ROLE_WRITE[user['role']])}}
 
     def assistant(self,user,bid,question):
         state=self.state(user,bid); records=state['records']; business=state['business']
@@ -1102,13 +1142,13 @@ class Desk(BusinessFeatures):
         balance=sum(x.get('_balance',0) for x in records['invoices'] if x.get('status')=='issued' and x.get('_balance',0)>0)
         if any(x in query for x in ('owe','overdue','payment','collect','receivable')):
             due=[x for x in records['invoices'] if x.get('status')=='issued' and x.get('_balance',0)>0]
-            answer=f"{len(due)} issued invoices have NPR {balance:,.2f} outstanding. "
+            answer=f"{len(due)} issued invoices have {business.get('currency', 'NPR')} {balance:,.2f} outstanding. "
             answer+='Prioritise '+', '.join(x.get('number','Invoice') for x in sorted(due,key=lambda x:x.get('due_date','9999'))[:4])+'.' if due else 'There are no outstanding issued invoices.'
         elif any(x in query for x in ('profit','margin','earning','cost')):
             if user['role']!='owner': raise Problem('Job profitability is available to the owner.',403)
             jobs=[x for x in records['jobs'] if x.get('_revenue',0)]
-            answer=f"Recorded billed jobs show NPR {sum(x['_revenue'] for x in jobs):,.2f} net revenue and NPR {sum(x['_cost'] for x in jobs):,.2f} direct costs/incentives. "
-            answer+=f"Their contribution is NPR {sum(x['_contribution'] for x in jobs):,.2f}, before business overhead. {sum(x['_cost_provisional'] for x in jobs)} jobs still have provisional costs."
+            answer=f"Recorded billed jobs show {business.get('currency', 'NPR')} {sum(x['_revenue'] for x in jobs):,.2f} net revenue and {business.get('currency', 'NPR')} {sum(x['_cost'] for x in jobs):,.2f} direct costs/incentives. "
+            answer+=f"Their contribution is {business.get('currency', 'NPR')} {sum(x['_contribution'] for x in jobs):,.2f}, before business overhead. {sum(x['_cost_provisional'] for x in jobs)} jobs still have provisional costs."
         elif any(x in query for x in ('stock','part','material','supplier')):
             low=[x for x in records['stock'] if x.get('_quantity',0)<=x.get('reorder_at',0)]
             answer=f"{len(low)} stock items are at or below their reorder level. "+(', '.join(x['name'] for x in low[:6])+'.' if low else 'Stock levels are above the recorded reorder points.')

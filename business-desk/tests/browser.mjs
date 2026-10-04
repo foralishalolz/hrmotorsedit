@@ -1,3 +1,4 @@
+import {verifyExperience} from './experience.mjs';
 import {createRequire} from 'node:module';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -108,7 +109,7 @@ try{
   await nav('today');await page.getByRole('button',{name:'Dismiss notification'}).click();await page.screenshot({path:path.join(out,'dashboard-desktop.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'dashboard-phone.png'),fullPage:true});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Phone dashboard overflows viewport');
-  await page.getByRole('button',{name:'+ New bill',exact:true}).click();
+  await page.getByRole('button',{name:'New bill',exact:true}).click();
   await page.locator('#field-customer_id').selectOption(customer.id);
   await page.locator('[data-col="description"]').fill('Phone-entered service');
   await page.locator('[data-col="rate"]').fill('500');
@@ -116,8 +117,9 @@ try{
   check(await page.locator('.line-table').evaluate(x=>x.scrollWidth<=window.innerWidth),'Phone bill editor requires horizontal scrolling');
   await page.screenshot({path:path.join(out,'billing-phone.png'),fullPage:true});
   await close();
+  await verifyExperience({page,api,check,nav,close,formSave,out,fs});
   check(errors.length===0,'Browser exceptions: '+errors.join('; '));
-  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui']},null,2));
+  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors']},null,2));
   console.log(JSON.stringify({checks,errors,output:out}));
 }catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});console.error(error);console.error('PAGE ERRORS',errors);process.exitCode=1;}
 finally{if(process.env.DESK_AGENT_BROWSER)await promisify(execFile)(process.env.DESK_AGENT_BROWSER,['close'],{timeout:10000}).catch(()=>{});await context.close().catch(()=>{});await browser.close();}
