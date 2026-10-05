@@ -1,6 +1,25 @@
 # Verification
 
-Release candidate: 2.1.0-rc.1.
+Current release candidate: **2.2.0-rc.1**. This verifies a candidate, not a live Vercel deployment or completed business acceptance.
+
+## Current 2.2 evidence
+
+[GitHub Actions run 37272337114](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37272337114), application commit `5a0745ed5220be8ae46970dbd0a77ea3d5320655`, passed all four jobs:
+
+- **82 local business/security tests**. The ordinary suite discovers 92 tests and skips the 10 PostgreSQL-only tests when their disposable test URL is absent.
+- **10 real PostgreSQL tests**, using PostgreSQL 16 and two independent server adapters: organisation/role scoping, cross-business references, hashed shared sessions, shared login limits, scoped exports, preview rollback, origin/CSRF/size checks, missing-configuration failure, one receipt under concurrent retry and one sale of the final stock item.
+- **61 real Chromium assertions**, Chromium `145.0.7632.6`, **0 uncaught exceptions**. Configuration → API → records → UI flows cover all four profiles, Nepal/India billing, line returns, owned branding/manifest, CSV preview/import, agreed quantity pricing, stock counting, opening collections/statements, cash closing, inspections, offline reload/sync/conflicts and lost payment responses.
+- **Container build/health and Caddy validation** pass. Static Vercel packaging also passes in the PostgreSQL job.
+
+The 2,000-customer synthetic snapshot rendered 50 visible rows: synchronous DOM rendering p50 **3.1 ms**, p95 **5.9 ms** over 15 samples on the CI runner. This excludes paint, network and database work; it is not a production capacity, mobile hardware or end-to-end latency claim. The regression budget is deliberately conservative.
+
+Evidence is in the workflow's `business-desk-browser-evidence` artifact; screenshots include the business-owned desktop/phone dashboard, desktop/phone configuration, customer statement, catalogue checkout, India dashboard and sector workspaces. The final desktop and phone configuration/dashboard screenshots were visually inspected. Artifacts use seven-day retention; rerun on the intended deployment and retain its release evidence before launch.
+
+Vercel team access returned 403, so the actual deployment, canonical domain, provider restore, real function/database performance, independent security review and staff/accountant pilot acceptance are outstanding. WSGI and PostgreSQL CI tests do not assert those gates are complete. See [Vercel deployment](docs/VERCEL_DEPLOYMENT.md) and [release gates](docs/RELEASE_GATES.md).
+
+## Historical 2.1 evidence
+
+Historical baseline: 2.1.0-rc.1.
 
 ## Completed locally
 

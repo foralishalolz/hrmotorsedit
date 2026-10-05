@@ -186,7 +186,7 @@ Professional means predictable daily work: one clear primary action, visible act
 
 The interface uses local SVG icons and system fonts, so it does not depend on external font/icon services. Reduced-motion preferences are respected. Desktop tables are paginated to 50 rows. Record ID lookups use an index, and customer relationship metrics are aggregated once per state instead of rescanning all invoices for every customer and segment.
 
-The browser suite exercises a synthetic 2,000-customer snapshot and records render timings and visible row counts. This isolates client rendering; it is not a network benchmark or proof of nationwide server capacity. Actual performance depends on record mix, concurrent workers, database location, devices and connectivity. Do not promise “never crashes” or “instant for every business” from one test runner.
+The browser suite exercises a synthetic 2,000-customer snapshot and records render timings and visible row counts. This measures synchronous DOM rendering, excluding painting, network and database work; it is not a network benchmark or proof of nationwide server capacity. Actual performance depends on record mix, concurrent workers, database location, devices and connectivity. Do not promise “never crashes” or “instant for every business” from one test runner.
 
 For pilot acceptance, measure the real steps to enter a repeat customer’s bill, collect a partial balance, inspect a job and find an overdue follow-up. Compare with their existing process. A suggested target is a substantial reduction in retyping and missed next actions, but establish a baseline before publishing a percentage improvement. Record failure recovery as carefully as speed.
 
