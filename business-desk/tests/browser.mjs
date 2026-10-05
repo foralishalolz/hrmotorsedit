@@ -1,4 +1,5 @@
 import {verifyStudio} from './studio.mjs';
+import {verifyPremium} from './premium.mjs';
 import {verifyExperience} from './experience.mjs';
 import {createRequire} from 'node:module';
 import {execFile} from 'node:child_process';
@@ -11,7 +12,7 @@ const {chromium}=require('playwright');
 const base=process.env.DESK_TEST_URL;
 const out=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../verification');
 await fs.mkdir(out,{recursive:true});
-const browser=await chromium.launch({executablePath:process.env.DESK_CHROMIUM||undefined,headless:true,args:['--no-sandbox','--no-zygote','--single-process','--disable-gpu','--disable-dev-shm-usage','--remote-debugging-port=9223']});
+const browser=await chromium.launch({executablePath:process.env.DESK_CHROMIUM||undefined,headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--remote-debugging-port=9223']});
 const context=await browser.newContext({viewport:{width:1440,height:1100}});
 const page=await context.newPage();page.setDefaultTimeout(12000);
 const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -121,8 +122,13 @@ try{
   await close();
   await verifyExperience({page,api,check,nav,close,formSave,out,fs});
   await verifyStudio({page,api,check,nav,close,formSave,out,fs});
+  await verifyPremium({page,api,check,nav,close,formSave,out,fs});
   check(errors.length===0,'Browser exceptions: '+errors.join('; '));
-  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering']},null,2));
+  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering','dashboard-targets','focus-inbox','owner-portfolio','display-preferences','failed-business-switch','staff-ui-permissions','touch-layout','navigation-breakpoints','reduced-motion']},null,2));
   console.log(JSON.stringify({checks,errors,output:out}));
-}catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});console.error(error);console.error('PAGE ERRORS',errors);process.exitCode=1;}
+}catch(error){
+  await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});
+  const layout=await page.evaluate(()=>({width:innerWidth,height:innerHeight,page:S.page,business:S.state?.business?.profile,dialogOpen:document.querySelector('#editor')?.open,dialogError:document.querySelector('#form-error')?.textContent,invalidFields:Array.from(document.querySelectorAll('#editor input,#editor select,#editor textarea')).filter(x=>!x.validity.valid).map(x=>({name:x.name,message:x.validationMessage})),nodes:['.layout','.sidebar','.mobile-menu','.mobile-tabs','.workspace'].map(selector=>{const x=document.querySelector(selector);if(!x)return {selector,missing:true};const style=getComputedStyle(x),r=x.getBoundingClientRect();return {selector,display:style.display,visibility:style.visibility,position:style.position,transform:style.transform,rect:{x:r.x,y:r.y,width:r.width,height:r.height}};})})).catch(()=>null);
+  await fs.writeFile(path.join(out,'failure-layout.json'),JSON.stringify(layout,null,2));console.error(error);console.error('PAGE ERRORS',errors);process.exitCode=1;
+}
 finally{if(process.env.DESK_AGENT_BROWSER)await promisify(execFile)(process.env.DESK_AGENT_BROWSER,['close'],{timeout:10000}).catch(()=>{});await context.close().catch(()=>{});await browser.close();}

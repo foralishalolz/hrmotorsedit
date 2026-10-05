@@ -1,0 +1,113 @@
+export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) {
+  const capture=async(file,fullPage=true)=>{while(await page.getByRole('button',{name:'Dismiss notification',exact:true}).count())await page.getByRole('button',{name:'Dismiss notification',exact:true}).first().click();await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:out+file,fullPage});};
+  await page.setViewportSize({width:1440,height:1100});await nav('today');
+  const bid=await page.evaluate(()=>S.bid);
+  await page.getByRole('button',{name:'Personalise dashboard',exact:true}).click();
+  await page.getByLabel('Your current business focus').fill('Deliver promised repairs and follow up on collections.');
+  await page.getByLabel('Monthly collection target, NPR').fill('75000');
+  await page.getByRole('button',{name:'Save dashboard',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  let state=await api('state?business='+bid);
+  check(state.business.monthly_collection_target===75000&&state.business.goal.includes('promised repairs'),'Dashboard target or shared business focus was not persisted');
+  check((await page.locator('.target-strip').textContent()).includes('75,000.00'),'Collection pulse did not use saved monthly target');
+  check(await page.getByRole('progressbar',{name:'Monthly collection target progress'}).count()===1,'Collection target has no accessible progress');
+  await nav('focus');
+  await formSave('followups',{name:'Owner review of promised collection',task_category:'collections',priority:'high',due_date:state.today,next_action:'Call and agree the actual payment date',notes:'Fictional owner task'});
+  state=await api('state?business='+bid);const task=state.records.followups.find(x=>x.name==='Owner review of promised collection');
+  check(task.priority==='high'&&task.task_category==='collections','Task category and priority did not persist');
+  await page.locator('[data-action=focus-group][data-group=collections]').click();
+  check(await page.locator('.focus-row.urgent').filter({hasText:task.name}).count()===1,'High priority task is missing from the collection focus filter');
+  await page.getByRole('button',{name:'Add a task',exact:false}).click();
+  await page.locator('#field-name').fill('Prepare next client visit');await page.locator('#field-due_date').fill(await page.evaluate(()=>addDays(S.state.today,3)));
+  await page.locator('#field-task_category').selectOption('work');await page.locator('[form=record-form][type=submit]').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  await page.getByRole('button',{name:'Next 7 days',exact:true}).click();
+  check(await page.locator('.focus-row').filter({hasText:'Prepare next client visit'}).count()===1,'Future task is not visible in planned work');
+  await page.locator('#focus-search').fill('Prepare next');
+  check(await page.locator('.focus-row').count()===1,'Focus search did not narrow planned tasks');
+  await capture('/premium-focus-desktop.png');
+  await nav('today');
+  // Record a real next date for a generated job issue, then read it back from data.
+  const job=state.records.jobs[0];
+  await api('record',{business_id:bid,kind:'jobs',id:job.id,version:job.version,data:{blocker:'Awaiting customer decision'}});
+  await page.locator('[data-action=refresh]').click();
+  await page.locator('.focus-row').filter({hasText:'Job needs attention'}).getByRole('button',{name:'Plan next step',exact:true}).click();
+  await page.locator('#field-due_date').fill(await page.evaluate(()=>addDays(S.state.today,2)));
+  await page.locator('#field-notes').fill('Owner will call the customer on the agreed date.');
+  await page.getByRole('button',{name:'Save follow-up',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  state=await api('state?business='+bid);
+  check(state.records.followups.some(x=>x.alert_key==='blocked:'+job.id&&x.notes.includes('agreed date')),'Generated issue next step did not persist');
+  check(!state.alerts.some(x=>x.key==='blocked:'+job.id),'Planned issue returned before its next date');
+  await capture('/premium-dashboard-desktop.png');
+  await page.getByRole('button',{name:'Display preferences',exact:false}).click();
+  await page.getByRole('radio',{name:/Solid surfaces/}).check();await page.getByRole('radio',{name:/Compact/}).check();
+  await page.getByRole('button',{name:'Save display preferences',exact:true}).click();
+  await page.reload();await page.locator('.workspace-greeting').waitFor();
+  check(await page.evaluate(()=>document.documentElement.dataset.surface==='solid'&&document.documentElement.dataset.density==='compact'),'Display preferences did not survive refresh');
+  await page.getByRole('button',{name:'Display preferences',exact:false}).click();
+  await page.getByRole('radio',{name:/Liquid glass/}).check();await page.getByRole('radio',{name:/Comfortable/}).check();await page.getByRole('button',{name:'Save display preferences',exact:true}).click();
+  await nav('portfolio');await page.locator('.business-tile').first().waitFor();
+  const portfolio=await api('portfolio');
+  check(portfolio.businesses.length===4&&Object.keys(portfolio.totals).length===2,'Owner portfolio mixed currencies or omitted a business');
+  check(await page.locator('.currency-summary').count()===2,'Owner currency summaries are not separate');
+  check(await page.locator('.business-tile').filter({hasText:'Collision Craft'}).count()===1,'Owner overview lost business trading name');
+  await capture('/premium-owner-overview-desktop.png');
+  const retail=portfolio.businesses.find(x=>x.profile==='retail');
+  await page.route('**/api/state?business='+retail.id,route=>route.abort());
+  await page.locator(`[data-action=switch-business][data-business="${retail.id}"]`).click();
+  await page.waitForFunction(()=>!S.loadingBusiness);
+  check(await page.evaluate(id=>S.bid===id&&S.state.business.id===id,bid),'Failed switch mixed another business id with old records');
+  check(await page.locator('#business-picker').inputValue()===bid,'Failed business switch did not restore business selector');
+  await page.unroute('**/api/state?business='+retail.id);
+  await page.locator(`[data-action=switch-business][data-business="${retail.id}"]`).click();await page.waitForFunction(id=>S.bid===id&&S.state.business.id===id&&!S.loadingBusiness,retail.id);
+  check(await page.evaluate(()=>S.state.business.country==='IN'&&currency()==='INR'),'Successful owner switch retained the other business currency');
+  await page.locator('#business-picker').selectOption(bid);await page.waitForFunction(id=>S.state.business.id===id&&!S.loadingBusiness,bid);
+  await page.locator('#global-search').fill('Migrated Fleet');await page.locator('.search-card').waitFor();
+  check(await page.locator('.search-result').count()>0,'Indexed search lost customer and related records');
+  await page.locator('#global-search').fill('');await page.locator('.workspace-greeting').waitFor();
+  // Touch/desktop layouts, dialog overflow and reduced-motion preference.
+  for(const width of [320,390,768,900]) {
+    await page.setViewportSize({width,height:844});await nav('today');
+    check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Premium dashboard overflows at '+width+'px');
+    check(await page.locator('.mobile-tabs').evaluate(x=>{const r=x.getBoundingClientRect();return r.height>0&&r.top>=0&&r.bottom<=innerHeight;}),'Floating phone navigation is outside the viewport at '+width+'px');
+    if(width===390){await capture('/premium-dashboard-phone.png');await capture('/premium-dashboard-phone-viewport.png',false);}
+    await nav('focus');check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Focus inbox overflows at '+width+'px');
+    if(width===390)await capture('/premium-focus-phone.png');
+    await nav('portfolio');await page.locator('.business-tile').first().waitFor();check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Owner overview overflows at '+width+'px');
+    if(width===390)await capture('/premium-owner-overview-phone.png');
+  }
+  await nav('today');await page.getByRole('button',{name:'Personalise dashboard',exact:true}).click();
+  check(await page.locator('#editor').evaluate(x=>x.scrollWidth<=x.clientWidth+1),'Dashboard personalisation dialog overflows phone');await close();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  check(await page.evaluate(()=>getComputedStyle(document.querySelector('.nav-button')).transitionDuration.split(',').every(x=>parseFloat(x)===0)),'Reduced-motion preference is ignored');
+  await page.emulateMedia({reducedMotion:'no-preference'});await page.setViewportSize({width:1440,height:1100});
+  // Exercise real staff authentication: incomplete financial roles get work views.
+  await api('users',{name:'Fictional Front Desk',username:'premium-frontdesk',password:'fictional-staff-password',role:'frontdesk',business_ids:[bid]});
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.locator('#username').waitFor();
+  await page.getByLabel('Username',{exact:true}).fill('premium-frontdesk');await page.getByLabel('Password',{exact:true}).fill('fictional-staff-password');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.locator('.workspace-greeting').waitFor();
+  check(await page.locator('.sidebar [data-page=portfolio]').count()===0,'Staff can see owner portfolio navigation');
+  check(await page.locator('.collection-pulse').count()===0,'Incomplete financial role is shown a misleading collection dashboard');
+  const denied=await page.evaluate(async()=>{const r=await fetch('/api/portfolio');return r.status;});check(denied===403,'Owner overview API accepts a staff session');
+  await capture('/premium-staff-workspace-desktop.png');
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.locator('#username').waitFor();await page.getByLabel('Username',{exact:true}).fill('pilot-owner');await page.getByLabel('Password',{exact:true}).fill('test-only-password');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.locator('.workspace-greeting').waitFor();
+  await page.setViewportSize({width:901,height:844});
+  check(await page.locator('.sidebar').isVisible()&&!await page.locator('.mobile-menu').isVisible(),'Desktop navigation is missing at the 901px breakpoint');
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Desktop breakpoint overflows at 901px');
+  await page.setViewportSize({width:1440,height:1100});
+  const touchContext=await page.context().browser().newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,storageState:await page.context().storageState()});
+  const touchPage=await touchContext.newPage(),touchErrors=[];touchPage.on('pageerror',error=>touchErrors.push(error.message));
+  try {
+    await touchPage.goto(page.url());await touchPage.locator('.workspace-greeting').waitFor();
+    for(const width of [320,390]){
+      await touchPage.setViewportSize({width,height:844});
+      check(await touchPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Actual touch layout overflows at '+width+'px');
+      check(await touchPage.getByRole('button',{name:'New bill',exact:true}).evaluate(x=>x.getBoundingClientRect().height>=44),'Phone billing action has an undersized touch target');
+    }
+    await touchPage.screenshot({path:out+'/premium-touch-phone-viewport.png'});
+    await touchPage.getByRole('button',{name:'Toggle navigation',exact:true}).tap();
+    check(await touchPage.locator('.sidebar').isVisible(),'Touch navigation did not open');
+    await touchPage.getByRole('button',{name:'Close navigation',exact:true}).tap({position:{x:380,y:420}});
+    check(!await touchPage.locator('.sidebar').isVisible(),'Touch navigation did not close');
+    check(touchErrors.length===0,'Touch browser exceptions: '+touchErrors.join('; '));
+  }finally{await touchContext.close();}
+  const sizes=await page.evaluate(async()=>{const names=['premium.js','premium.css'];return Promise.all(names.map(async name=>{const r=await fetch('/'+name);return {name,bytes:(await r.arrayBuffer()).byteLength};}));});
+  check(sizes.reduce((n,x)=>n+x.bytes,0)<110000,'New UI assets exceeded the local 110 KB regression budget');await fs.writeFile(out+'/premium-asset-sizes.json',JSON.stringify(sizes,null,2));
+}

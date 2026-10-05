@@ -43,14 +43,14 @@ function extendModels() {
 }
 function enabledSections() {
   const modules=S.state.business.modules || ['sales','pipeline','workshop','customers','insurance','money','stock','team','followups','reports'];
-  const order=['today',...modules,'settings'];
+  const order=['today','focus',...(owner()?['portfolio']:[]),...modules.filter(key=>!['portfolio','focus'].includes(key)),'settings'];
   return [...new Set(order)].filter(key=>sections[key]).map(key=>[key,sections[key]])
     .filter(([key,section])=>(!section.tabs || section.tabs.some(kind=>S.state.permissions.read.includes(kind))) && (owner() || key!=='reports'));
 }
 function setupWizard(selected='garage'){return workspaceOnboarding(selected);}
 function customiseWorkspace() {
   const b=S.state.business;
-  const available=Object.entries(sections).filter(([key])=>!['today','settings'].includes(key));
+  const available=Object.entries(sections).filter(([key])=>!['today','focus','portfolio','settings'].includes(key));
   showDialog('Choose the work you manage', `<form id="workspace-form"><div id="form-error" class="form-error"></div><p class="help-text">Keep the daily navigation relevant. Hiding a module preserves its records and permissions.</p><div class="module-grid">${available.map(([key,section])=>`<label><input type="checkbox" name="modules" value="${key}" ${(b.modules||[]).includes(key)?'checked':''} ${['customers','money','followups'].includes(key)?'disabled':''}><span><b>${e(section.name)}</b><small>${e(section.hint)}</small></span></label>`).join('')}</div></form>`, '<button class="btn" data-action="close">Cancel</button><button class="btn primary" type="submit" form="workspace-form">Save workspace</button>', true);
   $('#workspace-form').onsubmit=async event=>{event.preventDefault();try{
     const modules=[...new Set(['customers','money','followups',...new FormData(event.target).getAll('modules')])];

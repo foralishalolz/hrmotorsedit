@@ -1,4 +1,4 @@
-# Business Desk · 2.2.0-rc.1
+# Business Desk · 2.3.0-rc.1
 
 A local or privately hosted business workspace for garages, vehicle showrooms, retailers and service businesses in Nepal and India. This is a controlled pilot candidate; finish the [release gates](docs/RELEASE_GATES.md) before operating it as a production service.
 
@@ -13,6 +13,12 @@ python3 server.py --open
 Open `http://127.0.0.1:8765`, create your owner account, and choose a business profile. Local mode binds to this computer only and does not need an internet connection. Your database is in `data/business-desk.sqlite3`. Keep the server window open.
 
 ## New in this candidate
+
+- A responsive liquid-glass workspace with local SVG icons, comfortable/compact layouts, solid-surface preference, touch targets and reduced-motion support.
+- A personalised daily dashboard, shared business focus and owner-configured panels. Collection targets use recorded receipts less refunds, including advances.
+- A Focus inbox with task priority/category, due and next-seven-day views, search, and retained next-step follow-ups.
+- An owner-only all-business overview with trading names, sector workflows, separate INR/NPR totals and bounded pagination. Totals cover the visible page.
+- Cached linked-record search, debounced input, request timeouts and safe business-switch rollback. Local operation still uses Python/SQLite without internet services.
 
 - Business-owned trading/legal identity, logo, colour, browser/installed-app identity and retained document footers.
 - Guided configuration of workflow, clients, money rules, staff and a switching plan.

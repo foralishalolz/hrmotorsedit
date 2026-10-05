@@ -53,6 +53,13 @@ class ImportPreview(Exception):
 class OperationsFeatures:
     def validate_operations(self, conn, user, bid, kind, data, old):
         from domain import Problem, decimal, money, number, checked_date
+        if kind == 'followups':
+            data.setdefault('task_category', 'clients')
+            data.setdefault('priority', 'normal')
+            if data['task_category'] not in ('collections','work','stock','clients','team','other'):
+                raise Problem('Choose a supported task category.')
+            if data['priority'] not in ('high','normal','low'):
+                raise Problem('Choose high, normal or low task priority.')
         if kind == 'customers':
             data['credit_limit'] = number(money(decimal(data.get('credit_limit',0), 'Credit limit', 0)))
             agreements = data.setdefault('price_agreements', [])

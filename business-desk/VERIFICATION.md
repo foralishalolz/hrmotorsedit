@@ -1,8 +1,22 @@
 # Verification
 
-Current release candidate: **2.2.0-rc.1**. This verifies a candidate, not a live Vercel deployment or completed business acceptance.
+Current release candidate: **2.3.0-rc.1**. This verifies a candidate, not a live Vercel deployment or completed business acceptance.
 
-## India/Nepal operating-kit verification
+## Premium workspace verification
+
+The current [PR #11 checks](https://github.com/foralishalolz/hrmotorsedit/pull/11/checks) run the 2.3 source. The suite discovers **115 tests**: **104 local business/security/packaging checks**, plus **11 real PostgreSQL checks** in the separate disposable PostgreSQL 16 job. Ordinary local discovery skips those 11 when their test URL is absent.
+
+New coverage checks owner organisation/role isolation, page-scoped currency totals, credits/refunds/advances/allocations and reconciled opening balances, future-dated receipt exclusion from monthly collections, posted/draft distinctions, old business settings, bounded pagination, stock/work stages, task priority and stale settings versions.
+
+The real Chromium flow covers saved dashboard goals/targets, Focus categories and future tasks, generated-issue next dates, display preference reload, trading names and separate INR/NPR owner summaries, failed and successful business switching, linked-record search, actual front-desk sign-in and the owner API's 403 response. Viewports include 320, 390, 768, 900 and 901 pixels; an isolated authenticated touch context checks 320/390 layouts, a 44-pixel billing action and drawer open/close. Reduced motion, floating navigation position, dialog overflow, the original billing/offline/stock flows and uncaught browser errors are checked. The exact assertion count, browser version and measured asset sizes are emitted into `verification/` artifacts, rather than assumed in this document.
+
+The new UI uses local system fonts/SVG icons and inline SVG charts. Search caches linked record text per state and debounces input for 140 ms; results cap at 100. Existing lists still paginate 50 rows. The added UI assets have a conservative 110 KB raw-size regression budget. Synthetic rendering timing excludes network, database, paint and real-device latency; it is not a deployment SLO.
+
+The same workflow builds the private container, checks health/Caddy, tests the real PostgreSQL adapter and packages Vercel static assets. Clean kits include the new backend and UI files, with no runtime data. The current kit counts are local **62**, private-server **68**, Vercel **70**, GitHub **96** source files, excluding the per-ZIP manifest. Browser artifacts expire after seven days; operator-kit artifacts after 14. Use the manual package workflow to regenerate them.
+
+This is a tested release candidate when those checks are green. They do not certify an actual Vercel deployment, bank/government integrations, field-device performance, statutory payroll or customer recovery/acceptance. The intended connected Vercel team remains blocked by a 403 access response. Follow the existing release gates for the actual operator and business.
+
+## Historical 2.2 India/Nepal operating-kit verification
 
 The 5 October 2026 research/hosting update adds 12 package/configuration checks to the unchanged application baseline below. Local discovery: **104 tests, 94 run successfully and 10 PostgreSQL-only tests skipped without their disposable URL**. An extracted GitHub source kit, initialised/staged as documented, passes the same suite.
 
@@ -10,7 +24,7 @@ Clean ZIPs were built for local (58 source files), private-server (64), Vercel (
 
 GitHub's quality workflow additionally publishes clean operator-kit artifacts for 14 days; a manual package workflow is provided. Neither workflow deploys or migrates a live business. Real provider/platform acceptance remains outstanding.
 
-## Current 2.2 application evidence
+## Historical 2.2 application evidence
 
 [GitHub Actions run 37272337114](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37272337114), application commit `5a0745ed5220be8ae46970dbd0a77ea3d5320655`, passed all four jobs:
 

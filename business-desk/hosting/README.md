@@ -1,6 +1,6 @@
 # Hosting and running Business Desk
 
-One application, separate operating kits. Version 2.2.0-rc.1 is a tested pilot candidate; completing a package does not complete production acceptance.
+One application, separate operating kits. Version 2.3.0-rc.1 is a tested pilot candidate; completing a package does not complete production acceptance.
 
 | What you need | Folder | Database | Who can connect |
 |---|---|---|---|
@@ -19,7 +19,7 @@ One application, separate operating kits. Version 2.2.0-rc.1 is a tested pilot c
 From the repository root:
 
 ```sh
-python3 business-desk/hosting/package.py --profile all --output business-desk/packages/release-2.2
+python3 business-desk/hosting/package.py --profile all --output business-desk/packages/release-2.3
 ```
 
 This produces four ZIPs, each with a `business-desk/` application folder, a file/hash manifest and an accompanying SHA-256 checksum. Extract the edition you need. Use a new output folder for each build: existing release files are deliberately not overwritten. The GitHub source edition needs a Git checkout and includes only tracked/staged app files plus the quality/package workflows. Runtime editions use an explicit source list. None includes a customer's database, backups, `.env`, development dependencies or generated `public/` output. The Vercel kit generates `public/` during its build.

@@ -1,5 +1,5 @@
-const CACHE = 'business-desk-2.2.0-rc1';
-const ASSETS = ['/', '/app.js', '/sync.js', '/workspace.js', '/experience.js', '/experience.css', '/studio.js', '/studio.css', '/app.css', '/workspace.css', '/fonts.css', '/icon.svg', '/manifest.webmanifest'];
+const CACHE = 'business-desk-2.3.0-rc1';
+const ASSETS = ['/', '/app.js', '/sync.js', '/workspace.js', '/experience.js', '/experience.css', '/studio.js', '/studio.css', '/premium.js', '/premium.css', '/app.css', '/workspace.css', '/fonts.css', '/icon.svg', '/manifest.webmanifest'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('business-desk-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {

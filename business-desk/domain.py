@@ -17,6 +17,7 @@ from pathlib import Path
 from business import BusinessFeatures, PROFILES
 from regional import RegionalFeatures, INDIA_STATES, UTGST_STATES, business_today, financial_year
 from operations import OperationsFeatures, validate_identity
+from insights import InsightsFeatures, validate_dashboard
 
 NEPAL = timezone(timedelta(hours=5, minutes=45))
 KINDS = {
@@ -215,7 +216,7 @@ def password_ok(password, stored):
         return False
 
 
-class Desk(OperationsFeatures, RegionalFeatures, BusinessFeatures):
+class Desk(InsightsFeatures, OperationsFeatures, RegionalFeatures, BusinessFeatures):
     def __init__(self, folder):
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -442,6 +443,7 @@ class Desk(OperationsFeatures, RegionalFeatures, BusinessFeatures):
             raise Problem('Business name is required.')
         self.configure_region(data)
         validate_identity(data)
+        validate_dashboard(data)
         data['vat_rate']=number(decimal(data.get('vat_rate',13),'VAT rate',0,100))
         data['print_font_size']=number(decimal(data.get('print_font_size',11),'Print font size',8,16))
         data['daily_capacity']=number(decimal(data.get('daily_capacity',8),'Daily capacity',1,10000))
@@ -1135,7 +1137,7 @@ class Desk(OperationsFeatures, RegionalFeatures, BusinessFeatures):
             filtered.append(alert)
         for task in records['followups']:
             if not task.get('alert_key') and task.get('status','open')!='completed' and task.get('due_date','')<=business_today(business):
-                add_task={'key':'manual:'+task['id'],'priority':2,'title':task.get('name','Follow-up'),
+                add_task={'key':'manual:'+task['id'],'priority':{'high':1,'normal':2,'low':3}.get(task.get('priority'),2),'title':task.get('name','Follow-up'),
                     'detail':task.get('notes',''),'type':'followups','record_id':task['id'],'next_action':task.get('next_action','Complete the planned follow-up.')}
                 filtered.append(add_task)
         for opening in records['opening_balances']:
