@@ -18,6 +18,8 @@ const focusGroups = {all:'Everything',collections:'Collections',work:'Work & vis
 const panelNames = {focus:'Priority inbox',collections:'Collection pulse',sector:'Sector workflow',schedule:'Upcoming schedule',team:'Team presence',assistant:'Ask your records'};
 const searchIndexes = new WeakMap();
 function extendPremiumModels() {
+  sections.reports.name='Business health';
+  models.expenses.fields.push(['expense_treatment','Profit and loss treatment','select',['Operating expense','Inventory purchase','Payroll payout','Staff advance','Capital asset','Tax payment','Owner withdrawal']]);
   sections.focus={name:'Focus inbox',icon:deskIcon('focus'),hint:'A clear next step for every business issue.'};
   sections.portfolio={name:'All businesses',icon:deskIcon('portfolio'),hint:'An owner overview, with each currency kept separate.'};
   models.followups.fields.push(['task_category','Task category','select',Object.keys(focusGroups).filter(k=>k!=='all')],['priority','Priority','select',['normal','high','low']]);
@@ -203,8 +205,9 @@ async function switchBusiness(businessId,recordKind='',recordId='') {
   finally{S.loadingBusiness=false;$('.layout')?.classList.remove('workspace-loading');$('.layout')?.removeAttribute('aria-busy');if($('#business-picker'))$('#business-picker').disabled=false;}
 }
 async function premiumAction(button) {
-  const {action}=button.dataset;
   if(S.loadingBusiness)return true;
+  if(await analyticsAction(button))return true;
+  const {action}=button.dataset;
   if(action==='close-navigation'){$('.layout')?.classList.remove('nav-open');$('.mobile-menu')?.setAttribute('aria-expanded','false');$('.mobile-menu')?.focus();return true;}
   if(action==='dashboard-config'){dashboardConfig();return true;}
   if(action==='appearance'){appearanceDialog();return true;}

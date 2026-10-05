@@ -128,3 +128,103 @@ class HostedBoundary(unittest.TestCase):
                 body=b''.join(index.application({'HTTP_HOST':'desk.example.test'},lambda status,headers:captured.append(status)))
             self.assertTrue(captured[0].startswith('503'));self.assertIn(b'No local database',body)
         finally:index._desk=previous
+
+    def test_owner_analytics_postgres_snapshot_and_gateway_are_scoped(self):
+        self.issue(self.draft());r=self.worker.analytics(self.user,self.bid)
+        self.assertEqual(r['summary']['sales'],100);self.assertEqual(r['business_id'],self.bid)
+        with self.assertRaises(Problem):self.worker.analytics(self.user,self.other_b['id'])
+        (status,_),body=self.wsgi('/api/analytics',headers={'HTTP_COOKIE':'desk_session='+self.token,'QUERY_STRING':'business='+self.bid})
+        self.assertTrue(status.startswith('200'),status);self.assertEqual(body['summary']['sales'],100)
+
+    def test_verified_identity_signup_creates_only_its_own_organisation(self):
+        identity={'id':str(uuid.uuid4()),'email':'owner@example.test','ttl':3600,'role':'manager','organization_id':self.user['organization_id']}
+        token,result=self.desk.email_identity(identity,'Verified Owner',True)
+        user,_=self.worker.session(token)
+        self.assertEqual(user['role'],'owner');self.assertNotEqual(user['organization_id'],self.user['organization_id'])
+        self.assertEqual(self.worker.businesses(user),[]);self.assertEqual(result['user']['auth_email'],'owner@example.test')
+        again,_=self.worker.email_identity(identity,'Changed display input',False)
+        self.assertEqual(self.desk.session(again)[0]['id'],user['id'])
+        with self.desk.connect() as conn:
+            ttl=conn.execute('SELECT extract(epoch FROM expires-now()) AS ttl FROM desk_sessions WHERE token_hash=?',(self.desk.token_hash(token),)).fetchone()['ttl']
+        self.assertTrue(0<ttl<=3600)
+
+    def test_email_invitation_keeps_saved_staff_role_and_business_scope(self):
+        self.desk.add_user(self.user,{'name':'Invited front desk','auth_email':'staff@example.test','role':'frontdesk','business_ids':[self.bid]})
+        identity={'id':str(uuid.uuid4()),'email':'staff@example.test','ttl':3600,'role':'owner','organization_id':self.other['organization_id']}
+        token,_=self.worker.email_identity(identity,'Untrusted new name',True)
+        staff,_=self.desk.session(token)
+        self.assertEqual(staff['role'],'frontdesk');self.assertEqual(staff['organization_id'],self.user['organization_id'])
+        self.assertEqual([b['id'] for b in self.worker.businesses(staff)],[self.bid])
+        with self.assertRaises(Problem):self.worker.analytics(staff,self.bid)
+        with self.assertRaises(Problem):self.worker.state(staff,self.other_b['id'])
+        with self.desk.connect() as conn:conn.execute('UPDATE users SET active=0 WHERE id=?',(staff['id'],))
+        with self.assertRaises(Problem):self.worker.session(token)
+        with self.assertRaises(Problem):self.worker.email_identity(identity,'',True)
+
+    def test_email_signups_cannot_claim_legacy_usernames_or_closed_registration(self):
+        self.desk.add_user(self.user,{'name':'Existing employee','username':'legacy@example.test','password':'fictional-password','role':'frontdesk','business_ids':[self.bid]})
+        identity={'id':str(uuid.uuid4()),'email':'legacy@example.test','ttl':3600}
+        with self.assertRaises(Problem):self.worker.email_identity(identity,'Person',False)
+        token,_=self.worker.email_identity(identity,'Independent owner',True)
+        self.assertNotEqual(self.desk.session(token)[0]['organization_id'],self.user['organization_id'])
+
+    def test_expired_duplicate_or_foreign_invitation_rejected(self):
+        data={'name':'Staff','auth_email':'staff@example.test','role':'frontdesk','business_ids':[self.bid]}
+        self.desk.add_user(self.user,data)
+        with self.assertRaises(Problem):self.worker.add_user(self.other,{**data,'business_ids':[self.other_b['id']]})
+        with self.assertRaises(Problem):self.desk.add_user(self.user,{**data,'auth_email':'other@example.test','business_ids':[self.other_b['id']]})
+        with self.desk.connect() as conn:conn.execute("UPDATE desk_email_invites SET expires=now()-interval '1 day'")
+        with self.assertRaises(Problem):self.worker.email_identity({'id':str(uuid.uuid4()),'email':'staff@example.test','ttl':3600},'',True)
+        accounts=self.desk.users(self.user);self.assertTrue(any(x.get('invite_pending') and x.get('auth_email')=='staff@example.test' for x in accounts))
+
+    def test_gateway_email_verification_to_saved_session_uses_only_provider_identity(self):
+        from cloud_auth import SupabaseEmailAuth
+        identity={'id':str(uuid.uuid4()),'email':'gateway@example.test','ttl':3600}
+        env={'DESK_EMAIL_AUTH':'true','SUPABASE_URL':'https://fictional-ci-project.supabase.co','SUPABASE_PUBLISHABLE_KEY':'sb_publishable_fictional_ci_key_only'}
+        with unittest.mock.patch.dict(os.environ,env),unittest.mock.patch.object(SupabaseEmailAuth,'send_code') as send,unittest.mock.patch.object(SupabaseEmailAuth,'verify',return_value=identity):
+            status,_=self.wsgi('/api/email-code','POST',{'email':identity['email'],'signup':True,'role':'owner'})
+            self.assertTrue(status[0].startswith('200'));send.assert_called_once_with(identity['email'],create_user=True)
+            (status,headers),body=self.wsgi('/api/email-login','POST',{'email':identity['email'],'code':'123456','signup':True,'name':'Gateway owner','provider_id':self.user['id'],'organization_id':self.user['organization_id']})
+            self.assertTrue(status.startswith('200'),body);cookie=dict(headers)['Set-Cookie']
+            self.assertIn('HttpOnly',cookie);self.assertIn('Secure',cookie);self.assertIn('SameSite=Strict',cookie);self.assertIn('Max-Age=3600',cookie)
+            saved=self.worker.session(cookie.split(';')[0].split('=',1)[1])[0]
+            self.assertEqual(saved['id'],body['user']['id']);self.assertNotEqual(saved['organization_id'],self.user['organization_id'])
+            self.assertNotIn('access_token',body)
+
+
+@unittest.skipUnless(URL,'Disposable PostgreSQL test URL not configured')
+class PrivateSupabaseSchema(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not URL.endswith('/desk_ci'):raise RuntimeError('Only the disposable desk_ci database can be used.')
+        from cloud import CloudDesk
+        cls.CloudDesk=CloudDesk;cls.desk=CloudDesk(URL,bootstrap=True,schema='desk_private_ci')
+        with cls.desk.connect() as conn:
+            for name in ('anon','authenticated'):
+                if not conn.execute('SELECT 1 FROM pg_roles WHERE rolname=?',(name,)).fetchone():conn.execute('CREATE ROLE '+name+' NOLOGIN')
+            if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname='desk_runtime_ci'").fetchone():
+                conn.execute("CREATE ROLE desk_runtime_ci LOGIN PASSWORD 'fictional-runtime-password' NOSUPERUSER NOBYPASSRLS")
+        from deploy.setup_supabase import secure_schema
+        secure_schema(cls.desk,'desk_runtime_ci')
+        from urllib.parse import urlsplit,urlunsplit
+        parsed=urlsplit(URL);runtime_url=urlunsplit(parsed._replace(netloc='desk_runtime_ci:fictional-runtime-password@'+parsed.hostname+':'+str(parsed.port or 5432)))
+        cls.runtime=CloudDesk(runtime_url,schema='desk_private_ci')
+    @classmethod
+    def tearDownClass(cls):cls.runtime.close();cls.desk.close()
+    def test_runtime_role_can_signup_and_reconnect_without_ddl(self):
+        identity={'id':str(uuid.uuid4()),'email':'private'+uuid.uuid4().hex+'@example.test','ttl':3600}
+        token,_=self.runtime.email_identity(identity,'Private schema owner',True)
+        user,_=self.runtime.session(token)
+        business=self.runtime.save_business(user,{'data':{'name':'Private runtime garage'}})
+        self.assertEqual(self.runtime.analytics(user,business['id'])['business_id'],business['id'])
+        with self.runtime.connect() as conn:
+            self.assertTrue(self.runtime.column_exists(conn,'users','organization_id'))
+        with self.assertRaises(Exception):
+            with self.runtime.connect() as conn:conn.execute('CREATE TABLE desk_private_ci.forbidden(id TEXT)')
+    def test_data_api_roles_cannot_read_records_and_rls_enabled(self):
+        with self.desk.connect() as conn:
+            for role in ('anon','authenticated'):
+                self.assertFalse(conn.execute("SELECT has_schema_privilege(?,?,'USAGE') AS allowed",(role,self.desk.schema)).fetchone()['allowed'])
+                self.assertFalse(conn.execute("SELECT has_table_privilege(?,?,'SELECT') AS allowed",(role,self.desk.schema+'.records')).fetchone()['allowed'])
+            rows=conn.execute('SELECT c.relname,c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=? AND c.relkind=?',(self.desk.schema,'r')).fetchall()
+            self.assertTrue(all(x['relrowsecurity'] for x in rows));self.assertEqual(len(rows),12)
