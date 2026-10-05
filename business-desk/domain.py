@@ -16,6 +16,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from business import BusinessFeatures, PROFILES
 from regional import RegionalFeatures, INDIA_STATES, UTGST_STATES, business_today, financial_year
+from operations import OperationsFeatures, validate_identity
 
 NEPAL = timezone(timedelta(hours=5, minutes=45))
 KINDS = {
@@ -23,7 +24,7 @@ KINDS = {
     'invoices', 'payments', 'credits', 'expenses', 'suppliers', 'stock', 'movements',
     'purchases', 'employees', 'attendance', 'time_entries', 'commissions', 'payroll',
     'followups', 'appointments', 'contracts', 'allocations',
-    'leads', 'vehicles', 'supplier_bills', 'supplier_payments',
+    'leads', 'vehicles', 'supplier_bills', 'supplier_payments', 'opening_balances', 'cash_closures',
 }
 ROLE_READ = {
     'owner': KINDS,
@@ -31,14 +32,16 @@ ROLE_READ = {
     'frontdesk': {'customers', 'assets', 'services', 'quotes', 'jobs', 'claims',
                   'external_quotes', 'invoices', 'payments', 'allocations', 'appointments', 'followups', 'contracts', 'leads', 'vehicles', 'employees'},
     'technician': {'jobs', 'time_entries', 'attendance', 'employees'},
-    'cashier': {'customers', 'invoices', 'payments', 'allocations', 'credits', 'expenses', 'followups', 'stock', 'supplier_bills', 'supplier_payments', 'suppliers'},
+    'cashier': {'customers', 'invoices', 'payments', 'allocations', 'credits', 'expenses', 'followups', 'stock', 'supplier_bills', 'supplier_payments', 'suppliers', 'opening_balances','cash_closures'},
+    'stock_clerk': {'stock','movements','suppliers','purchases','supplier_bills','services'},
 }
 ROLE_WRITE = {
     'owner': KINDS,
-    'manager': ROLE_READ['manager'] - {'credits'},
+    'manager': ROLE_READ['manager'] - {'credits','opening_balances','cash_closures'},
     'frontdesk': ROLE_READ['frontdesk'] - {'invoices', 'payments', 'allocations', 'vehicles', 'employees'},
     'technician': {'jobs', 'time_entries', 'attendance'},
-    'cashier': {'invoices', 'payments', 'allocations', 'expenses', 'followups', 'supplier_payments'},
+    'cashier': {'invoices', 'payments', 'allocations', 'expenses', 'followups', 'supplier_payments','cash_closures'},
+    'stock_clerk': {'stock','movements','suppliers','purchases','supplier_bills'},
 }
 STAGES = ['Intake', 'Awaiting approval', 'Awaiting parts', 'Body repair', 'Preparation',
           'Painting', 'Curing', 'Reassembly', 'Quality check', 'Ready', 'Delivered']
@@ -212,7 +215,7 @@ def password_ok(password, stored):
         return False
 
 
-class Desk(RegionalFeatures, BusinessFeatures):
+class Desk(OperationsFeatures, RegionalFeatures, BusinessFeatures):
     def __init__(self, folder):
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -221,6 +224,11 @@ class Desk(RegionalFeatures, BusinessFeatures):
         self.local = threading.local()
         self.sessions = {}
         self.login_attempts = {}
+        self.initialize_schema()
+        if self.has_users():
+            self.backup(automatic=True)
+
+    def initialize_schema(self):
         with self.connect() as conn:
             conn.executescript('''
                 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -249,8 +257,6 @@ class Desk(RegionalFeatures, BusinessFeatures):
             ''')
             conn.execute("INSERT OR IGNORE INTO meta VALUES ('schema','1')")
             self.migrate(conn)
-        if self.has_users():
-            self.backup(automatic=True)
 
     def connect(self):
         conn = sqlite3.connect(self.path, timeout=15, factory=ClosingConnection)
@@ -277,14 +283,22 @@ class Desk(RegionalFeatures, BusinessFeatures):
 
     def migrate(self, conn):
         version = conn.execute("SELECT value FROM meta WHERE key='schema'").fetchone()[0]
-        if version not in ('1', '2'):
+        if version not in ('1', '2', '3'):
             raise Problem('This database needs a newer version of Business Desk.')
         conn.execute('''CREATE TABLE IF NOT EXISTS commands (
             user_id TEXT NOT NULL, operation_id TEXT NOT NULL, business_id TEXT NOT NULL,
             fingerprint TEXT NOT NULL, response TEXT NOT NULL, created_at TEXT NOT NULL,
             PRIMARY KEY(user_id,operation_id))''')
         conn.execute("INSERT OR IGNORE INTO meta VALUES ('data_epoch',?)", (identifier(),))
-        conn.execute("UPDATE meta SET value='2' WHERE key='schema'")
+        for table in ('users','businesses'):
+            if not self.column_exists(conn,table,'organization_id'):
+                conn.execute('ALTER TABLE '+table+" ADD COLUMN organization_id TEXT NOT NULL DEFAULT 'local'")
+        conn.execute('CREATE INDEX IF NOT EXISTS businesses_org ON businesses(organization_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS users_org ON users(organization_id)')
+        conn.execute("UPDATE meta SET value='3' WHERE key='schema'")
+
+    def column_exists(self,conn,table,column):
+        return any(x['name']==column for x in conn.execute('PRAGMA table_info('+table+')'))
 
     def command(self, user, envelope):
         operation_id = str(envelope.get('operation_id', ''))
@@ -301,10 +315,12 @@ class Desk(RegionalFeatures, BusinessFeatures):
             'archive': lambda: self.archive(user, bid, data.get('kind'), data.get('id'), data.get('version')) or {'ok': True},
             'time': lambda: self.time_action(user, bid, data),
             'payroll': lambda: self.prepare_payroll(user, bid, data),
+            'stock_count': lambda: self.stock_count(user,bid,data),
+            'import_batch': lambda: self.import_batch(user,bid,data),
         }
         if path not in handlers:
             raise Problem('This operation cannot be synchronised.')
-        self.permitted(user, data.get('kind') if path in ('record','action','archive') else 'time_entries' if path == 'time' else 'payroll', True)
+        self.permitted(user, data.get('kind') if path in ('record','action','archive','import_batch') else 'time_entries' if path == 'time' else 'movements' if path=='stock_count' else 'payroll', True)
         fingerprint = hashlib.sha256(json.dumps({'endpoint': path, 'payload': data}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         with self.transaction() as conn:
             self.business(conn, bid)
@@ -326,7 +342,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
             return bool(conn.execute('SELECT 1 FROM users LIMIT 1').fetchone())
 
     def user_view(self, user):
-        return {k: user[k] for k in ('id', 'username', 'name', 'role', 'employee_id')}
+        return {k: user[k] for k in ('id', 'username', 'name', 'role', 'employee_id')} | {'organization_id':user.get('organization_id','local')}
 
     def setup(self, data):
         with self.transaction() as conn:
@@ -338,7 +354,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
             if not username or not name or not 12 <= len(password) <= 256 or len(username) > 100 or len(name) > 200:
                 raise Problem('Enter your name, username and a password of 12 to 256 characters.')
             uid = identifier()
-            conn.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,1)',
+            conn.execute('INSERT INTO users(id,username,name,password,role,business_ids,employee_id,active) VALUES (?,?,?,?,?,?,?,1)',
                          (uid, username, name, password_hash(password), 'owner', '[]', ''))
             user = dict(conn.execute('SELECT * FROM users WHERE id=?', (uid,)).fetchone())
         return self.make_session(user)
@@ -350,6 +366,10 @@ class Desk(RegionalFeatures, BusinessFeatures):
         if len(self.sessions) > 10000: raise Problem('Too many active sessions. Try again later.', 429)
         self.sessions[token] = {'user_id': user['id'], 'csrf': csrf, 'password_stamp': hashlib.sha256(user['password'].encode()).hexdigest(), 'expires': datetime.now(timezone.utc) + timedelta(hours=12)}
         return token, {'user': self.user_view(user), 'csrf': csrf}
+
+    def invalidate_sessions(self, user_id, keep_token=''):
+        for token, session in list(self.sessions.items()):
+            if session['user_id']==user_id and token!=keep_token: self.sessions.pop(token,None)
 
     def login(self, data):
         username = str(data.get('username', '')).strip().lower()
@@ -380,6 +400,11 @@ class Desk(RegionalFeatures, BusinessFeatures):
         return dict(row), session['csrf']
 
     def business_allowed(self, user, bid):
+        if not bid: raise Problem('Choose a business.',400)
+        with self.connect() as conn:
+            row=conn.execute('SELECT organization_id FROM businesses WHERE id=?',(bid,)).fetchone()
+        if not row or row['organization_id']!=user.get('organization_id','local'):
+            raise Problem('Business not found in your organisation.',404)
         if user['role'] != 'owner' and bid not in json.loads(user['business_ids']):
             raise Problem('You do not have access to this business.', 403)
 
@@ -395,7 +420,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
 
     def businesses(self, user):
         with self.connect() as conn:
-            rows = conn.execute('SELECT * FROM businesses ORDER BY rowid').fetchall()
+            rows = conn.execute('SELECT * FROM businesses WHERE organization_id=? ORDER BY id',(user.get('organization_id','local'),)).fetchall()
         ids = json.loads(user['business_ids'])
         return [{**json.loads(r['data']), 'id': r['id'], 'version': r['version']} for r in rows
                 if user['role'] == 'owner' or r['id'] in ids]
@@ -406,6 +431,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
         data = dict(payload.get('data', {}))
         previous = None
         if payload.get('id'):
+            self.business_allowed(user,payload['id'])
             with self.connect() as conn:
                 previous = self.business(conn, payload['id'])
                 data = {**previous, **data}
@@ -415,6 +441,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
         if not str(data.get('name', '')).strip():
             raise Problem('Business name is required.')
         self.configure_region(data)
+        validate_identity(data)
         data['vat_rate']=number(decimal(data.get('vat_rate',13),'VAT rate',0,100))
         data['print_font_size']=number(decimal(data.get('print_font_size',11),'Print font size',8,16))
         data['daily_capacity']=number(decimal(data.get('daily_capacity',8),'Daily capacity',1,10000))
@@ -434,7 +461,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
                     raise Problem('Country and currency are fixed once monetary records exist. Create a separate business for another country.')
                 conn.execute('UPDATE businesses SET data=?,version=version+1 WHERE id=?', (json.dumps(data), bid))
             else:
-                conn.execute('INSERT INTO businesses(id,data) VALUES (?,?)', (bid, json.dumps(data)))
+                conn.execute('INSERT INTO businesses(id,data,organization_id) VALUES (?,?,?)', (bid, json.dumps(data),user.get('organization_id','local')))
             self.audit(conn, user, bid, 'Business settings saved', 'businesses', bid, data['name'])
             if payload.get('demo') and not old:
                 self.seed(conn, bid)
@@ -515,11 +542,12 @@ class Desk(RegionalFeatures, BusinessFeatures):
         for key, expected in [('customer_id','customers'), ('asset_id','assets'), ('job_id','jobs'),
                               ('employee_id','employees'), ('supplier_id','suppliers'), ('claim_id','claims'),
                               ('quote_id','quotes'), ('invoice_id','invoices'), ('vehicle_id','vehicles'),
-                              ('lead_id','leads'), ('supplier_bill_id','supplier_bills')]:
+                              ('lead_id','leads'), ('supplier_bill_id','supplier_bills'), ('opening_balance_id','opening_balances')]:
             if data.get(key):
                 self.record(conn, bid, data[key], expected)
         self.validate_business_record(conn, user, bid, kind, data, old)
         self.validate_personalisation(conn, bid, kind, data, old)
+        self.validate_operations(conn,user,bid,kind,data,old)
         for key in ('date', 'due_date', 'expected_date', 'start_date', 'end_date', 'expiry_date'):
             if data.get(key):
                 checked_date(data[key], key.replace('_', ' '))
@@ -568,7 +596,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
             if user['role'] == 'technician':
                 if not old or user.get('employee_id') not in old.get('employee_ids', []):
                     raise Problem('You can update only your assigned jobs.', 403)
-                allowed = {'stage', 'tasks', 'notes', 'blocker', 'custom_fields'}
+                allowed = {'stage', 'tasks', 'notes', 'blocker', 'custom_fields','inspection'}
                 if any(data.get(k) != old.get(k) for k in set(data) - allowed if k not in ('id','version','type','created_at','updated_at') and not k.startswith('_')):
                     raise Problem('Technicians can update tasks, stages and work notes.', 403)
             for emp in data.get('employee_ids', []):
@@ -691,6 +719,9 @@ class Desk(RegionalFeatures, BusinessFeatures):
         reference = str(data.get('reference', '')).strip()
         if reference and any(x.get('reference') == reference and x.get('method') == data.get('method') and x.get('direction','receipt') == data.get('direction','receipt') for x in records['payments']):
             raise Problem('That payment reference is already recorded.', 409)
+        if data.get('opening_balance_id'):
+            self.validate_opening_payment(conn,bid,data)
+            return
         data['number'] = self.next_number(conn, bid, 'RCT' if data.get('direction') != 'refund' else 'RFD')
         if not data.get('invoice_id'):
             if data.get('direction') == 'refund' or not data.get('customer_id'):
@@ -770,6 +801,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
                     raise Problem('Invoice is already issued.', 409)
                 self.prepare_regional_document(conn, bid, record, issuing=True)
                 totals = calculate(record)
+                self.enforce_credit_limit(conn,user,bid,record,totals,payload)
                 if not totals['lines']:
                     raise Problem('Add at least one invoice line.')
                 record.update(status='issued', number=self.next_number(conn, bid, 'INV', record.get('date')), issued_at=now(),
@@ -839,7 +871,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
             elif kind == 'purchases' and action == 'receive':
                 result=self.receive(conn,bid,record,payload)
             elif kind == 'payments' and action == 'allocate':
-                if record.get('invoice_id') or record.get('direction','receipt') != 'receipt': raise Problem('Only an unapplied advance can be allocated.')
+                if record.get('invoice_id') or record.get('opening_balance_id') or record.get('direction','receipt') != 'receipt': raise Problem('Only an unapplied advance can be allocated.')
                 invoice = self.record(conn,bid,payload.get('invoice_id'),'invoices')
                 if invoice.get('status')!='issued' or invoice.get('customer_id')!=record.get('customer_id'): raise Problem('Choose an issued invoice for the same customer.')
                 records=self.records(conn,bid)
@@ -1011,11 +1043,11 @@ class Desk(RegionalFeatures, BusinessFeatures):
         with self.transaction() as conn:
             rec=self.record(conn,bid,rid,kind)
             if rec['version']!=version: raise Problem('Record changed. Refresh first.',409)
-            if kind in {'payments','credits','movements','time_entries','allocations','supplier_bills','supplier_payments'} or (kind in {'quotes','invoices','payroll','commissions'} and rec.get('status','draft') not in ('draft','earned')):
+            if kind in {'payments','credits','movements','time_entries','allocations','supplier_bills','supplier_payments','opening_balances','cash_closures'} or (kind in {'quotes','invoices','payroll','commissions'} and rec.get('status','draft') not in ('draft','earned')):
                 raise Problem('This posted record is retained. Use a correction.')
             for collection in self.records(conn,bid).values():
                 for other in collection:
-                    if other['id']!=rid and (rid in [other.get(k) for k in ('customer_id','asset_id','job_id','quote_id','invoice_id','employee_id','item_id','supplier_id','claim_id','previous_id','group_id','payment_id','vehicle_id','lead_id','reserved_lead_id','supplier_bill_id','purchase_id')]
+                    if other['id']!=rid and (rid in [other.get(k) for k in ('customer_id','asset_id','job_id','quote_id','invoice_id','employee_id','item_id','supplier_id','claim_id','previous_id','group_id','payment_id','vehicle_id','lead_id','reserved_lead_id','supplier_bill_id','purchase_id','opening_balance_id')]
                         or rid in other.get('employee_ids',[]) or rid in other.get('commission_ids',[]) or any(x.get('item_id')==rid or x.get('employee_id')==rid for x in other.get('items',[])+other.get('lines',[]))):
                         raise Problem('This record is linked to other work. Keep it and mark it inactive instead.')
             conn.execute('UPDATE records SET archived=1,version=version+1 WHERE id=?',(rid,))
@@ -1023,6 +1055,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
 
     def enrich(self,records):
         self.enrich_business_records(records)
+        self.enrich_operations(records)
         for kind in ('quotes','invoices','external_quotes'):
             for rec in records[kind]:
                 rec['_totals']=rec.get('totals_snapshot') or calculate(rec)
@@ -1030,7 +1063,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
             _,credit,paid,balance=self.invoice_values(records,invoice)
             invoice.update(_credited=number(credit),_paid=number(paid),_balance=number(balance))
         for payment in records['payments']:
-            payment['_unallocated']=number(money(payment['amount'])-sum((money(x['amount']) for x in records['allocations'] if x.get('payment_id')==payment['id']),Decimal(0))) if not payment.get('invoice_id') else 0
+            payment['_unallocated']=number(money(payment['amount'])-sum((money(x['amount']) for x in records['allocations'] if x.get('payment_id')==payment['id']),Decimal(0))) if not payment.get('invoice_id') and not payment.get('opening_balance_id') else 0
         for item in records['stock']:
             item['_quantity']=number(self.stock_quantity(records,item['id']))
         employees={x['id']:x for x in records['employees']}
@@ -1105,6 +1138,12 @@ class Desk(RegionalFeatures, BusinessFeatures):
                 add_task={'key':'manual:'+task['id'],'priority':2,'title':task.get('name','Follow-up'),
                     'detail':task.get('notes',''),'type':'followups','record_id':task['id'],'next_action':task.get('next_action','Complete the planned follow-up.')}
                 filtered.append(add_task)
+        for opening in records['opening_balances']:
+            if opening.get('_balance',0)>.009:
+                filtered.append({'key':'opening:'+opening['id'],'priority':2,'title':'Opening balance to collect','detail':opening['source_reference'],'type':'opening_balances','record_id':opening['id'],'next_action':'Confirm the reconciled balance and record the actual receipt.'})
+        for closure in records['cash_closures']:
+            if closure.get('_source_changed'):
+                filtered.append({'key':'cash:'+closure['id'],'priority':1,'title':'Cash count needs review','detail':closure['date'],'type':'cash_closures','record_id':closure['id'],'next_action':'Cash entries changed after this count. Reconcile and post an owner-reviewed replacement.'})
         return sorted(filtered,key=lambda x:(x['priority'],x['title']))
 
     def state(self,user,bid):
@@ -1195,7 +1234,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
     def users(self,user):
         if user['role']!='owner': raise Problem('Only the owner can manage accounts.',403)
         with self.connect() as conn:
-            return [self.user_view(dict(x))|{'business_ids':json.loads(x['business_ids']),'active':bool(x['active'])} for x in conn.execute('SELECT * FROM users')]
+            return [self.user_view(dict(x))|{'business_ids':json.loads(x['business_ids']),'active':bool(x['active'])} for x in conn.execute('SELECT * FROM users WHERE organization_id=?',(user.get('organization_id','local'),))]
 
     def add_user(self,user,data):
         if user['role']!='owner': raise Problem('Only the owner can create accounts.',403)
@@ -1205,18 +1244,18 @@ class Desk(RegionalFeatures, BusinessFeatures):
             raise Problem('Enter name, username, role and a password of 12 to 256 characters.')
         ids=data.get('business_ids',[])
         with self.transaction() as conn:
-            for bid in ids: self.business(conn,bid)
+            for bid in ids: self.business_allowed(user,bid);self.business(conn,bid)
             if not ids and role!='owner': raise Problem('Choose at least one business for this account.')
             eid=data.get('employee_id','')
             if role=='technician' and (len(ids)!=1 or not eid):
                 raise Problem('A technician account needs one business and a linked employee.')
             if eid: self.record(conn,ids[0],eid,'employees')
             try:
-                conn.execute('INSERT INTO users VALUES (?,?,?,?,?,?,?,1)',(identifier(),username,name,password_hash(password),role,json.dumps(ids),eid))
+                conn.execute('INSERT INTO users(id,username,name,password,role,business_ids,employee_id,active,organization_id) VALUES (?,?,?,?,?,?,?,1,?)',(identifier(),username,name,password_hash(password),role,json.dumps(ids),eid,user.get('organization_id','local')))
             except sqlite3.IntegrityError: raise Problem('That username is already used.',409)
         return {'ok':True}
 
-    def backup(self,automatic=False):
+    def backup(self,automatic=False,user=None):
         folder=self.folder/'backups'; folder.mkdir(exist_ok=True)
         path=folder/('daily-'+today()+'.sqlite3' if automatic else 'backup-'+datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+secrets.token_hex(3)+'.sqlite3')
         with self.lock,self.connect() as source,closing(sqlite3.connect(path)) as target:
@@ -1235,7 +1274,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
             with closing(sqlite3.connect(temp)) as source:
                 source.execute('PRAGMA query_only=ON')
                 if source.execute('PRAGMA integrity_check').fetchone()[0]!='ok': raise Problem('Backup integrity check failed.')
-                if source.execute("SELECT value FROM meta WHERE key='schema'").fetchone()[0] not in ('1','2'): raise Problem('This backup uses an unsupported schema.')
+                if source.execute("SELECT value FROM meta WHERE key='schema'").fetchone()[0] not in ('1','2','3'): raise Problem('This backup uses an unsupported schema.')
                 for name in ('records','businesses','users','audit','attachments','counters'):
                     source.execute('SELECT * FROM '+name+' LIMIT 1')
                 with self.lock:

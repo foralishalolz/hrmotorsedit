@@ -1,0 +1,9 @@
+data
+verification
+node_modules
+.venv
+__pycache__
+*.sqlite3*
+*.zip
+test_*.py
+tests

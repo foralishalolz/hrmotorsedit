@@ -3,7 +3,7 @@
 // The server is authoritative. Offline drafts never issue invoices, reserve
 // stock/vehicles, pay payroll, or claim to have posted a receipt.
 const DeskSync = (() => {
-  const commandPaths = new Set(['record', 'action', 'archive', 'time', 'payroll']);
+  const commandPaths = new Set(['record', 'action', 'archive', 'time', 'payroll', 'import_batch', 'stock_count']);
   const draftKinds = new Set(['customers', 'quotes', 'leads', 'followups', 'attendance']);
   let pending = [], snapshot = null, key = null, salt = null, userId = '', syncing = false;
   let lastOnline = 0;
