@@ -1,10 +1,10 @@
 # Verification
 
-Release candidate: 2.0.0-rc.1.
+Release candidate: 2.1.0-rc.1.
 
 ## Completed locally
 
-`python3 -m unittest -q`: **43 tests passed**. Covers quotation approvals and snapshots, decimal VAT and credit rounding, receipts and advance allocation, inventory, payroll and commissions, business and role isolation, attachment/backup recovery, CSRF and Host checks, and the new pilot workflows.
+`python3 -m unittest -q`: **65 tests passed**. Covers quotation approvals and snapshots, decimal VAT and credit rounding, receipts and advance allocation, inventory, payroll and commissions, business and role isolation, attachment/backup recovery, CSRF and Host checks, and the new pilot workflows.
 
 New failure cases include:
 
@@ -24,9 +24,13 @@ New failure cases include:
 
 `tests/run_browser.py` starts an isolated disposable database. `tests/browser.mjs` exercises real forms, showroom booking → invoice → receipt, a lost payment response, encrypted offline reload, sync, and a conflicting edit from a second device. It captures desktop and phone screenshots, checks phone overflow and browser exceptions.
 
-GitHub Actions [run 37200204530](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37200204530), for application commit `d6d3db0f4d390e466200aece69106589c724fd49`, passed all three jobs: business rules, browser and container. The real Chromium browser run completed **17 assertions with no uncaught exceptions**. It exercised lost payment responses, encrypted offline reload, reconnection and a competing edit; desktop and phone screenshots were inspected. The container built, served its health endpoint, and its Caddy configuration validated.
+GitHub Actions [run 37265352725](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37265352725), for application commit `4b85ea06fa0b8184fbabaf54e0a64044603a3352`, passed all three jobs: **65 business/security tests**, **43 real-browser assertions with no uncaught exceptions**, and the container build/health plus Caddy configuration checks. The browser was Chromium `145.0.7632.6`.
 
-Local Chromium could not launch in the restricted workspace, so browser evidence came from that CI run. Screenshot review led to a final refinement: one dismissible notification and a stacked bill editor on phones. The browser suite now includes an additional phone-billing assertion; consult the latest PR check for subsequent commits. A CI pass does not replace live server recovery, staff-device and pilot acceptance.
+The browser run covered all four sector workspaces; India onboarding and domestic GST billing; customer discount/payment terms; keyboard barcode selection; a partial line credit with restocking; custom business/customer fields; case-insensitive command search; showroom reservation and collection; lost payment responses; encrypted offline reload; reconnection; and a competing-device edit. It checked phone overflow, readable balance cards and the stacked bill editor.
+
+Desktop screenshots for showroom inventory, garage work, service visits, quick billing and the client timeline were inspected, alongside phone dashboard, invoice editor and quick-billing screenshots. Evidence is retained in the run's `business-desk-browser-evidence` artifact for seven days. `tests/run_browser.py` reproduces it with disposable fictional records; do not commit live business data as evidence.
+
+Local Chromium could not launch in the restricted workspace, so the real-browser evidence came from CI. That verification found and resolved a dialog-close timing defect in cart-to-invoice review. Static review also tightened no-tax GST/cess preservation, and screenshot review improved large monetary values on phones. The final tests pass after those application changes. Subsequent documentation-only commits preserve that application code; consult the latest [PR #8 checks](https://github.com/foralishalolz/hrmotorsedit/pull/8/checks) before deployment. A CI pass does not replace live server recovery, staff-device and pilot acceptance.
 
 ```sh
 python3 -m unittest -v
@@ -36,3 +40,7 @@ python3 tests/run_browser.py
 ```
 
 See `docs/RELEASE_GATES.md` for operational and business acceptance still required before a production rollout.
+
+## 2.1 additions
+
+Twenty-two additional backend tests cover India GST components, included tax and percentage cess, financial-year numbering, retained print snapshots, registration/HSN/address checks, e-invoice blocking, currency immutability, customer terms/custom fields, unique barcodes, partial line returns/stock rollback/permissions, and no-tax rate preservation/invalid-cess rejection. The full suite has 65 tests. Exact current-commit CI results are recorded in the release pull request.
