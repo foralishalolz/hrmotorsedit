@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DESK_DATA_DIR=/data DESK_BIND=0
 WORKDIR /app
 COPY requirements.txt requirements-vercel.txt .
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home desk && mkdir /data && chown desk:desk /data
-COPY --chown=desk:desk domain.py business.py regional.py operations.py insights.py branding.py server.py hosted.py admin.py ./
+COPY --chown=desk:desk domain.py business.py regional.py operations.py insights.py analytics.py cloud_auth.py branding.py server.py hosted.py admin.py ./
 COPY --chown=desk:desk static ./static
 USER 10001:10001
 EXPOSE 8080

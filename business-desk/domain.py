@@ -18,6 +18,7 @@ from business import BusinessFeatures, PROFILES
 from regional import RegionalFeatures, INDIA_STATES, UTGST_STATES, business_today, financial_year
 from operations import OperationsFeatures, validate_identity
 from insights import InsightsFeatures, validate_dashboard
+from analytics import AnalyticsFeatures, EXPENSE_TREATMENTS, expense_treatment
 
 NEPAL = timezone(timedelta(hours=5, minutes=45))
 KINDS = {
@@ -216,7 +217,7 @@ def password_ok(password, stored):
         return False
 
 
-class Desk(InsightsFeatures, OperationsFeatures, RegionalFeatures, BusinessFeatures):
+class Desk(AnalyticsFeatures, InsightsFeatures, OperationsFeatures, RegionalFeatures, BusinessFeatures):
     def __init__(self, folder):
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -591,6 +592,10 @@ class Desk(InsightsFeatures, OperationsFeatures, RegionalFeatures, BusinessFeatu
             for key in ('rate','cost','amount','base_salary','hourly_cost','overtime_rate','shift_hours','employee_percent','employer_percent','percent','basis_amount','fixed_amount'):
                 if key in data:
                     data[key] = number(decimal(data[key], key.replace('_',' '), 0, 100 if 'percent' in key else None))
+        if kind == 'expenses':
+            treatment = expense_treatment(data)
+            if treatment not in EXPENSE_TREATMENTS: raise Problem('Choose a supported profit and loss treatment.')
+            data['expense_treatment'] = treatment
         if kind == 'expenses' and decimal(data.get('amount', 0)) <= 0:
             raise Problem('Expense amount must be greater than zero.')
         if kind=='expenses' and data.get('category')=='Staff advance' and not data.get('employee_id'): raise Problem('Choose the employee receiving the advance.')
@@ -601,6 +606,19 @@ class Desk(InsightsFeatures, OperationsFeatures, RegionalFeatures, BusinessFeatu
                 allowed = {'stage', 'tasks', 'notes', 'blocker', 'custom_fields','inspection'}
                 if any(data.get(k) != old.get(k) for k in set(data) - allowed if k not in ('id','version','type','created_at','updated_at') and not k.startswith('_')):
                     raise Problem('Technicians can update tasks, stages and work notes.', 403)
+            for key in ('completion_date','quality_rating','rework_count','quality_notes'):
+                if user['role'] != 'owner' and data.get(key) != (old or {}).get(key):
+                    raise Problem('Only the owner can change work quality reviews.',403)
+            if user['role']=='owner':
+                for key,limit in (('quality_rating',5),('rework_count',1000)):
+                    value=decimal(data.get(key,0),key.replace('_',' '),0)
+                    if value!=value.to_integral_value() or value>limit:raise Problem('Enter a valid '+key.replace('_',' ')+'.')
+                    data[key]=int(value)
+                data['quality_notes']=str(data.get('quality_notes','')).strip()[:1000]
+                if data.get('completion_date'):
+                    data['completion_date']=checked_date(data['completion_date'],'Completion date');completion=date.fromisoformat(data['completion_date']);business=self.business(conn,bid)
+                    if completion>date.fromisoformat(business_today(business)) or data.get('stage')!=(business.get('stages') or STAGES)[-1]:
+                        raise Problem('Record an actual completion date after final handover, with no future date.')
             for emp in data.get('employee_ids', []):
                 self.record(conn, bid, emp, 'employees')
             for key in ('labor_cost', 'additional_material_cost', 'subcontract_cost'):
@@ -1079,7 +1097,7 @@ class Desk(InsightsFeatures, OperationsFeatures, RegionalFeatures, BusinessFeatu
             if not labor:
                 labor=sum((decimal(x.get('hours',0))*decimal(x.get('hourly_cost_snapshot',employees.get(x.get('employee_id'),{}).get('hourly_cost',0)))
                            for x in records['time_entries'] if x.get('job_id')==job['id'] and x.get('end_at')),Decimal(0))
-            direct=sum((decimal(x.get('amount',0)) for x in records['expenses'] if x.get('job_id')==job['id'] and x.get('category')!='Staff advance'),Decimal(0))
+            direct=sum((decimal(x.get('amount',0)) for x in records['expenses'] if x.get('job_id')==job['id'] and expense_treatment(x)=='Operating expense'),Decimal(0))
             incentive=sum((decimal(x.get('amount',0)) for x in records['commissions'] if x.get('job_id')==job['id']),Decimal(0))
             cost=material+labor+decimal(job.get('additional_material_cost',0))+decimal(job.get('subcontract_cost',0))+direct+incentive
             job.update(_revenue=number(money(revenue)),_cost=number(money(cost)),_contribution=number(money(revenue-cost)),

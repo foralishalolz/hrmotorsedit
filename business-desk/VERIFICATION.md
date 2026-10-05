@@ -1,6 +1,22 @@
+# Verification · 2.4.0-rc.1
+
+The owner analytics and optional Supabase email-auth update has **147 discovered tests**: **128 local** calculation/business/security/packaging checks and **19 disposable PostgreSQL** checks. The local suite passes; PostgreSQL/browser/container checks must pass on the exact published commit before this candidate is released. Live provider email delivery and deployment acceptance are separate checks.
+
+The new regression cases cover profit versus cash, payroll/commission duplication, nonnegative cent allocations, credit cost reversals, credits to older bills, future receipts, opening balances, drafts, highest/lowest highlights beyond the 100-row table, missing wage/material costs, sample sizes, quality-review permissions and CSV formula escaping. Auth-boundary checks use fictional HTTP responses and never send a real email.
+
+The real PostgreSQL job extends the two-worker/org-scope suite with verified identity creation, saved invitation roles, disabled/expired accounts, legacy-username separation, provider-to-cookie-to-shared-session WSGI flow and analytics snapshots. A separate private schema tests a dedicated runtime role without DDL permission, server RLS, and denied Data API role grants. Auth provider responses in these CI flows are mocked; the PostgreSQL connections, saved identities and sessions are real and disposable.
+
+The Chromium suite extends the existing four-sector/offline/payment experience with live API-backed analytics, highest/lowest service/job results, profit/cash, CSV download, client search, saved quality ratings, team sample sizes, recommendations saved as follow-ups, period presets, failed-request recovery, keyboard tabs and 320/390/768/900/901 layouts. Verified-email UI fixtures check code submission, cooldown, invalid-code recovery, address changes and the legacy sign-in option. They do not verify SMTP or production Auth.
+
+The same source is packaged into four clean runtime/source kits: local 69, private-server 75, Vercel 78 and GitHub 107 source files, excluding each manifest. No database, account credentials, provider keys, live email or customer files enter CI or these kits. The public build copies only the static asset directory. Cloud runtime never creates a SQLite fallback and migrations remain explicit operator actions.
+
+Production blockers still require the intended accounts: the connected Vercel team returns 403, and a new Supabase project has not been selected/provisioned. See [Supabase setup](hosting/supabase/README.md) and [Business health calculation basis](docs/BUSINESS_HEALTH.md). The candidate does not claim a live deployment, statutory financial statements or real-device performance guarantees.
+
+## Historical verification
+
 # Verification
 
-Current release candidate: **2.3.0-rc.1**. This verifies a candidate, not a live Vercel deployment or completed business acceptance.
+Historical release candidate: **2.3.0-rc.1**. This verifies a candidate, not a live Vercel deployment or completed business acceptance.
 
 ## Premium workspace verification
 

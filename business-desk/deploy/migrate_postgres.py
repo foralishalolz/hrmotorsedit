@@ -10,6 +10,6 @@ from cloud import CloudDesk
 if __name__=='__main__':
     url=os.environ.get('DATABASE_DIRECT_URL','')
     if not url: raise SystemExit('Set DATABASE_DIRECT_URL for the intended backed-up database.')
-    desk=CloudDesk(url,bootstrap=True)
+    desk=CloudDesk(url,bootstrap=True,schema=os.environ.get('DESK_DB_SCHEMA','public'))
     desk.close()
-    print('Business Desk PostgreSQL schema 3 / cloud schema 1 is ready.')
+    print('Business Desk PostgreSQL schema 3 / cloud schema 1 / email schema 1 is ready.')
