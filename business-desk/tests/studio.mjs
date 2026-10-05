@@ -65,7 +65,7 @@ export async function verifyStudio({page,api,check,nav,close,formSave,out,fs}){
  const performance=await page.evaluate(()=>{
   const source=S.state;const original=source.records.customers;const synthetic=Array.from({length:2000},(_,i)=>({...original[0],id:'bench-'+i,name:'Benchmark client '+i}));
   S.state={...source,records:{...source.records,customers:synthetic}};S.page='customers';S.tab='customers';S.query='';S.listQuery='';S.customerSegment='all';
-  const durations=[];for(let i=0;i<15;i++){const start=performance.now();renderContent();durations.push(performance.now()-start);}durations.sort((a,b)=>a-b);const result={records:2000,visible_rows:document.querySelectorAll('#list-data tbody tr').length,p50_ms:durations[7],p95_ms:durations[14]};
+  const durations=[];for(let i=0;i<15;i++){const start=performance.now();renderContent();durations.push(performance.now()-start);}durations.sort((a,b)=>a-b);const result={measurement:'Synchronous DOM rendering; excludes paint, network and database',records:2000,visible_rows:document.querySelectorAll('#list-data tbody tr').length,p50_ms:durations[7],p95_ms:durations[14]};
   S.state=source;S.listSignature='';renderContent();return result;
  });
  check(performance.visible_rows===50,'Large customer lists are not paginated');check(performance.p95_ms<1500,'Customer rendering exceeded the conservative CI regression budget');

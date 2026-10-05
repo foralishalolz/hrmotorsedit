@@ -67,6 +67,15 @@ class BusinessOperations(unittest.TestCase):
         with self.assertRaises(Problem):self.save('payments',opening_balance_id=opening['id'],date=today(),amount=301,method='Cash')
         statement=self.desk.customer_statement(self.user,self.bid,self.c['id']);self.assertEqual(statement['balance'],300)
         self.assertEqual(len(statement['entries']),2);self.assertEqual(self.records()['payments'][0]['_unallocated'],0)
+    def test_restricted_financial_view_cannot_generate_incomplete_statement(self):
+        frontdesk={**self.user,'role':'frontdesk','business_ids':'["'+self.bid+'"]'}
+        with self.assertRaises(Problem):self.desk.customer_statement(frontdesk,self.bid,self.c['id'])
+
+    def test_assistant_includes_migrated_receivables(self):
+        self.opening(500)
+        answer=self.desk.assistant(self.user,self.bid,'Who owes us?')['answer']
+        self.assertIn('500.00',answer);self.assertIn('1 opening balances',answer)
+
     def test_opening_customer_credit_refund(self):
         opening=self.opening(-300)
         with self.assertRaises(Problem):self.save('payments',opening_balance_id=opening['id'],date=today(),amount=20,direction='receipt')
@@ -118,6 +127,11 @@ class BusinessOperations(unittest.TestCase):
         inv=self.issue(self.invoice(job_id=job['id']));self.save('payments',invoice_id=inv['id'],date=today(),amount=100,method='Cash')
         with self.assertRaises(Problem):self.update(job,stage=self.b['stages'][-1],tasks=[{'name':'Different check','done':True}])
         updated=self.update(job,stage=self.b['stages'][-1],tasks=[{'name':'Safety check','done':True}]);self.assertEqual(updated['stage'],self.b['stages'][-1])
+    def test_custom_handover_stage_stops_work_alerts(self):
+        self.settings(stages=['Received','Checking','Completed'])
+        job=self.save('jobs',name='Custom work',customer_id=self.c['id'],stage='Completed',due_date=today(),tasks=[])
+        self.assertFalse(any(x['record_id']==job['id'] for x in self.desk.state(self.user,self.bid)['alerts']))
+
     def test_inspection_technician_assignment_and_condition(self):
         employee=self.save('employees',name='Mechanic',active=True)
         job=self.save('jobs',name='Repair',customer_id=self.c['id'],stage=self.b['stages'][0],employee_ids=[employee['id']],tasks=[])

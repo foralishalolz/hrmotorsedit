@@ -1100,7 +1100,7 @@ class Desk(OperationsFeatures, RegionalFeatures, BusinessFeatures):
             if invoice.get('_balance',0)<-.009:
                 add('refund:'+invoice['id'],1,'Customer credit to resolve',invoice.get('number','Invoice'),'invoices',invoice['id'],'Review the credit and arrange an authorised refund or allocation.')
         for job in records['jobs']:
-            if job.get('stage')=='Delivered': continue
+            if job.get('stage')==(business.get('stages') or STAGES)[-1]: continue
             if job.get('blocker'):
                 add('blocked:'+job['id'],1,'Job needs attention',job['name']+' · '+job['blocker'],'jobs',job['id'],'Resolve the blocker or agree an updated delivery promise.')
             elif job.get('due_date') and job['due_date']<=business_today(business):
@@ -1179,11 +1179,12 @@ class Desk(OperationsFeatures, RegionalFeatures, BusinessFeatures):
     def assistant(self,user,bid,question):
         state=self.state(user,bid); records=state['records']; business=state['business']
         query=question.lower()
-        balance=sum(x.get('_balance',0) for x in records['invoices'] if x.get('status')=='issued' and x.get('_balance',0)>0)
+        opening_due=[x for x in records['opening_balances'] if x.get('_balance',0)>0]
+        balance=sum(x.get('_balance',0) for x in records['invoices'] if x.get('status')=='issued' and x.get('_balance',0)>0)+sum(x['_balance'] for x in opening_due)
         if any(x in query for x in ('owe','overdue','payment','collect','receivable')):
             due=[x for x in records['invoices'] if x.get('status')=='issued' and x.get('_balance',0)>0]
-            answer=f"{len(due)} issued invoices have {business.get('currency', 'NPR')} {balance:,.2f} outstanding. "
-            answer+='Prioritise '+', '.join(x.get('number','Invoice') for x in sorted(due,key=lambda x:x.get('due_date','9999'))[:4])+'.' if due else 'There are no outstanding issued invoices.'
+            answer=f"{len(due)} issued invoices and {len(opening_due)} opening balances have {business.get('currency', 'NPR')} {balance:,.2f} outstanding. "
+            answer+='Prioritise '+', '.join(x.get('number','Invoice') for x in sorted(due,key=lambda x:x.get('due_date','9999'))[:4])+'.' if due else 'Review the reconciled opening balances.' if opening_due else 'There are no outstanding issued invoices or opening balances.'
         elif any(x in query for x in ('profit','margin','earning','cost')):
             if user['role']!='owner': raise Problem('Job profitability is available to the owner.',403)
             jobs=[x for x in records['jobs'] if x.get('_revenue',0)]

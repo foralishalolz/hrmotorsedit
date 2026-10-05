@@ -16,6 +16,7 @@ const iconPaths={
   pipeline:'<rect x="3" y="4" width="5" height="14" rx="1"/><rect x="10" y="4" width="5" height="9" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/>',
   vehicles:'<path d="m5 9 2-5h10l2 5M3 10h18v8H3zM5 18v3m14-3v3M6 13h2m8 0h2"/>',
   search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/>',
+  arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
   refresh:'<path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5"/>',
@@ -91,12 +92,6 @@ function customerMetrics(customer){
   if(!clientMetricCache||clientMetricCache.state!==S.state){const map=new Map();for(const client of rows('customers'))map.set(client.id,{balance:0,spend:0,count:0,last:'',overdue:false,inactive:false,repeat:false});for(const invoice of rows('invoices')){if(invoice.status!=='issued')continue;const m=map.get(invoice.customer_id);if(!m)continue;m.balance+=invoice._balance;m.spend+=invoice._totals.total-invoice._credited;m.count++;if(invoice.date>m.last)m.last=invoice.date;m.overdue ||= invoice._balance>0&&invoice.due_date&&invoice.due_date<S.state.today;}for(const opening of rows('opening_balances')){const m=map.get(opening.customer_id);if(m)m.balance+=opening._balance;}for(const m of map.values()){m.inactive=!!m.last&&m.last<addDays(S.state.today,-90);m.repeat=m.count>1;}clientMetricCache={state:S.state,map};}
   return clientMetricCache.map.get(customer.id)||{balance:0,spend:0,count:0,last:'',overdue:false,inactive:false,repeat:false};
 }
-function previousCustomerMetrics(customer){
-  const invoices=rows('invoices').filter(x=>x.customer_id===customer.id&&x.status==='issued');
-  const balance=invoices.reduce((n,x)=>n+x._balance,0),spend=invoices.reduce((n,x)=>n+x._totals.total-x._credited,0);
-  const last=invoices.map(x=>x.date).sort().at(-1)||'';
-  return {balance,spend,count:invoices.length,last,overdue:invoices.some(x=>x._balance>0&&x.due_date&&x.due_date<S.state.today),inactive:!!last&&last<addDays(S.state.today,-90),repeat:invoices.length>1};
-}
 function customerSegments(list){
   const names={all:'All customers',owing:'Outstanding',repeat:'Repeat customers',inactive:'No sale in 90 days',consented:'Marketing consent'};
   const matches=(customer,key)=>{const m=customerMetrics(customer);return key==='all'||key==='owing'&&m.balance>0||key==='repeat'&&m.repeat||key==='inactive'&&m.inactive||key==='consented'&&customer.marketing_opt_in;};
@@ -147,7 +142,7 @@ function sectorFocus(){
   const profile=S.state.business.profile||'garage';
   if(profile==='retail')return `<section class="card"><div class="card-head"><div><h2>Restock before you run out</h2><p>Items at or below their reorder level.</p></div></div>${rows('stock').filter(x=>x._quantity<=x.reorder_at).slice(0,5).map(x=>`<div class="mini-row"><span class="catalogue-mark">${icon('stock')}</span><div class="grow"><button class="record-link" data-action="open" data-kind="stock" data-id="${x.id}">${e(x.name)}</button><p>${count(x._quantity)} ${e(x.unit)} available · reorder at ${count(x.reorder_at)}</p></div></div>`).join('')||empty('Stock levels look healthy','Set reorder levels on the products you track.')}</section>`;
   if(profile==='service')return `<section class="card"><div class="card-head"><div><h2>Upcoming visits</h2><p>Appointments for the next seven days.</p></div>${can('appointments')?'<button class="btn small" data-action="new" data-kind="appointments">Book visit</button>':''}</div>${rows('appointments').filter(x=>x.date>=S.state.today&&x.date<=addDays(S.state.today,7)&&!['cancelled','completed'].includes(x.status)).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,6).map(x=>`<div class="mini-row"><span class="visit-date">${e(dateLabel(x.date).split(' ').slice(0,2).join(' '))}<small>${e(x.time)}</small></span><div class="grow"><button class="record-link" data-action="open" data-kind="appointments" data-id="${x.id}">${e(x.name)}</button><p>${e(refLabel('customers',x.customer_id))}</p></div>${status(x.status)}</div>`).join('')||empty('No upcoming visits','Book a service visit and assign the team.')}</section>`;
-  if(profile==='garage')return `<section class="card"><div class="card-head"><div><h2>Workshop queue</h2><p>Promised dates and blockers, together.</p></div><button class="btn small" data-action="navigate" data-page="workshop">View work</button></div>${rows('jobs').filter(x=>x.stage!=='Delivered').sort((a,b)=>(a.due_date||'9999').localeCompare(b.due_date||'9999')).slice(0,5).map(x=>`<div class="mini-row"><span class="catalogue-mark">${icon('workshop')}</span><div class="grow"><button class="record-link" data-action="open" data-kind="jobs" data-id="${x.id}">${e(x.name)}</button><p>${e(x.blocker||refLabel('customers',x.customer_id))} · ${x.due_date?e(dateLabel(x.due_date)):'Set promised date'}</p></div>${status(x.stage)}</div>`).join('')||empty('Ready for your next job','Capture the complaint, agreed scope and delivery date.')}</section>`;
+  if(profile==='garage')return `<section class="card"><div class="card-head"><div><h2>Workshop queue</h2><p>Promised dates and blockers, together.</p></div><button class="btn small" data-action="navigate" data-page="workshop">View work</button></div>${rows('jobs').filter(x=>x.stage!==S.state.stages.at(-1)).sort((a,b)=>(a.due_date||'9999').localeCompare(b.due_date||'9999')).slice(0,5).map(x=>`<div class="mini-row"><span class="catalogue-mark">${icon('workshop')}</span><div class="grow"><button class="record-link" data-action="open" data-kind="jobs" data-id="${x.id}">${e(x.name)}</button><p>${e(x.blocker||refLabel('customers',x.customer_id))} · ${x.due_date?e(dateLabel(x.due_date)):'Set promised date'}</p></div>${status(x.stage)}</div>`).join('')||empty('Ready for your next job','Capture the complaint, agreed scope and delivery date.')}</section>`;
   return '';
 }
 function commandPalette(){

@@ -31,7 +31,7 @@ async function formSave(kind,values={}){
   await page.locator('[form="record-form"][type="submit"]').click();
   await page.waitForFunction(()=>!document.querySelector('#editor').open);
 }
-async function nav(name){await page.locator(`.sidebar [data-action="navigate"][data-page="${name}"]`).click();}
+async function nav(name){const button=page.locator(`.sidebar [data-action="navigate"][data-page="${name}"]`);if(!await button.isVisible())await page.locator('[data-action=mobile-menu]').click();await button.click();}
 async function close(){if(await page.locator('#editor').evaluate(x=>x.open))await page.locator('#editor [data-action="close"]').last().click();}
 try{
   await page.goto(base);

@@ -1,4 +1,4 @@
-# Business Desk · 2.1.0-rc.1
+# Business Desk · 2.2.0-rc.1
 
 A local or privately hosted business workspace for garages, vehicle showrooms, retailers and service businesses in Nepal and India. This is a controlled pilot candidate; finish the [release gates](docs/RELEASE_GATES.md) before operating it as a production service.
 
@@ -14,6 +14,13 @@ Open `http://127.0.0.1:8765`, create your owner account, and choose a business p
 
 ## New in this candidate
 
+- Business-owned trading/legal identity, logo, colour, browser/installed-app identity and retained document footers.
+- Guided configuration of workflow, clients, money rules, staff and a switching plan.
+- Reviewed CSV templates/mapping/preview, reconciled opening balances and collections, customer statements, agreed quantity prices, credit gates, cash closing, stock counts and inspections.
+- Paginated lists, indexed record lookup and aggregated customer metrics.
+- A durable PostgreSQL/Vercel candidate with private organisations, shared hashed sessions and cross-worker retry-safe transactions. Actual Vercel team access and production acceptance remain outstanding.
+
+
 - Country-aware Nepal/NPR and India/INR setup, domestic GST components, HSN/SAC, percentage cess and April–March Indian numbering. No government filing or IRP integration is claimed.
 - Business name/colour, speciality, work checklists and up to 20 custom fields for customers, work orders, enquiries and assets.
 - Customer relationship timeline, tags, language/contact preferences, agreed discounts and payment terms, and dynamic customer segments.
@@ -22,7 +29,7 @@ Open `http://127.0.0.1:8765`, create your owner account, and choose a business p
 - A consistent SVG icon set, mobile navigation and Ctrl/Command K command search.
 - **Free pilot — no charges, automatic conversion or payment-card collection.**
 
-Read the [India/Nepal product research](docs/INDIA_NEPAL_PRODUCT_RESEARCH.md) and [client discovery worksheet](docs/CLIENT_DISCOVERY_QUESTIONNAIRE.md).
+Read the [detailed India switching playbook](docs/INDIA_MARKET_AND_SWITCHING_PLAYBOOK.md), [Vercel runbook](docs/VERCEL_DEPLOYMENT.md), [India/Nepal product research](docs/INDIA_NEPAL_PRODUCT_RESEARCH.md) and [client discovery worksheet](docs/CLIENT_DISCOVERY_QUESTIONNAIRE.md).
 
 ## Your daily workspace
 
@@ -47,11 +54,11 @@ The first screen puts unpaid bills, receipts today, work or enquiries, and due a
 - Jobs, tasks, blockers, due dates, staff assignment, time tracking and direct contribution estimates.
 - Attendance, overnight shifts, reviewed payroll, salary advances and commissions. Commission collection eligibility can follow either a job or a sales enquiry. Payroll rates and statutory deductions require owner/accountant review.
 - Dated follow-ups generated from saved conditions. The records assistant answers supported questions from your data. It does not autonomously contact customers or use a cloud AI model.
-- Owner, manager, front desk, cashier and technician roles, per-business access, audit events, attachments, CSV/JSON export and complete SQLite backups.
+- Owner, manager, front desk, cashier, stock clerk and technician roles, per-business access, audit events, attachments, CSV/JSON export and complete SQLite backups.
 
 ## Several staff devices and offline drafts
 
-Use the [private HTTPS deployment](docs/DEPLOYMENT.md) for several phones/PCs. Each device connects to the same authoritative business server. Each paying organisation should have a separate instance during the pilot.
+Use the [private HTTPS deployment](docs/DEPLOYMENT.md) for several phones/PCs. Each device connects to the same authoritative business server. That deployment uses a separate SQLite instance per organisation. The [Vercel edition](docs/VERCEL_DEPLOYMENT.md) uses private organisations in durable PostgreSQL. Do not mix their recovery or migration procedures.
 
 On a trusted device, choose **Settings → Offline drafts on this device**, and set a separate offline passphrase. An encrypted device copy permits customer, enquiry, quotation-draft, attendance and follow-up entry during a connection loss. Payroll and commissions are excluded. Offline access expires 24 hours after the last online refresh.
 
@@ -61,9 +68,9 @@ Bills are issued, receipts posted, inventory allocated and payroll approved **on
 
 ## Backups and recovery
 
-The server takes a daily database backup at startup and while running, retaining the latest 14 daily files. **Full backup** downloads accounts, businesses, records and original attachment files. Keep an encrypted copy outside the server: the built-in local backup cannot protect against loss of the whole server.
+The local / single-server SQLite edition takes a daily database backup at startup and while running, retaining the latest 14 daily files. **Full backup** downloads accounts, businesses, records and original attachment files. Keep an encrypted copy outside the server: the built-in local backup cannot protect against loss of the whole server.
 
-Restore takes a safety backup, validates database integrity, migrates supported v1/v2 data, expires sessions, and changes the database epoch. Old pending device operations must be reviewed after restore. JSON/CSV exports are for portability and review, not full recovery.
+Restore takes a safety backup, validates database integrity, migrates supported v1/v2/v3 data, expires sessions, and changes the database epoch. Old pending device operations must be reviewed after restore. JSON/CSV exports are for portability and review, not full recovery.
 
 A server administrator can recover an account without a public password-reset endpoint:
 
@@ -95,3 +102,5 @@ python3 tests/run_browser.py
 The expanded checks exercise all four profiles, India billing/returns, customer terms and custom fields as well as the existing offline/retry flows.
 
 Node/Playwright are development-only dependencies. Local operation uses the Python standard library; private hosting adds the pinned Waitress dependency. See [verification](VERIFICATION.md), [security](SECURITY.md), and the [market and pilot plan](docs/MARKET_AND_PILOT.md).
+
+The hosted owner downloads a scoped organisation JSON export rather than a complete shared database. It excludes accounts and passwords and is not a PostgreSQL restore file. Provider backups and a verified restore are required before launch.
