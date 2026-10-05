@@ -37,7 +37,7 @@ The first screen puts unpaid bills, receipts today, work or enquiries, and due a
 
 ## Features included
 
-- Quotations with revisions, approval records, line/document discounts, mixed tax rates, VAT added/included/no VAT, NPR words, print styles and spreadsheet paste.
+- Quotations with revisions, approval records, line/document discounts, mixed tax rates, tax added/included/no tax, rupee amounts in words, print styles and spreadsheet paste.
 - Retained invoice snapshots, receipts/refunds, credit notes, advances and allocations. Issued bills and posted financial entries cannot be silently edited.
 - Insurance claims, expected payer shares, original document attachments, and clearly labelled hypothetical comparisons. Simulations are never presented as independent competitor quotations.
 - Sales enquiries with source, staff owner, follow-up date, next action, finance status, lost reason, and board view.

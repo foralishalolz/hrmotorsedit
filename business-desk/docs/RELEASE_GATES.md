@@ -4,8 +4,8 @@ This release is a pilot candidate, not a blanket claim that every SME workflow o
 
 | Gate | Required evidence | Current state |
 |---|---|---|
-| Financial and inventory rules | Passing tests for rounding, credits, duplicate retries, reservations, stock and payroll | 63 local tests passed; CI must pass on the deployment commit |
-| Real browser flows | Setup, billing, offline reload, conflicts, phone layout, no uncaught exceptions | Real Chromium checks passed in CI; desktop/phone screenshots inspected; see exact-commit checks in PR #1 |
+| Financial and inventory rules | Passing tests for rounding, credits, duplicate retries, reservations, stock and payroll | 65 tests passed locally and in [CI run 37265352725](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37265352725); latest deployment commit must pass |
+| Real browser flows | Setup, billing, offline reload, conflicts, phone layout, no uncaught exceptions | 43 real Chromium assertions passed, with zero uncaught errors; desktop/phone screenshots inspected; see [verification](../VERIFICATION.md) and [PR #8 checks](https://github.com/foralishalolz/hrmotorsedit/pull/8/checks) |
 | Hosted runtime | Container builds, health check passes, HTTPS proxy config validates | Container build/health and proxy validation passed in CI; no live server/domain provisioned |
 | Recovery | Encrypted offsite backup and a timed restore to a separate instance | Local backups/restore implemented; offsite destination and drill required |
 | Organisation isolation | Separate customer stacks, restricted owners, role checks on staff devices | Separate-instance model documented; deployment/operator checks required |
