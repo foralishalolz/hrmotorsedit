@@ -64,7 +64,7 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   check(await page.locator('.search-result').count()>0,'Indexed search lost customer and related records');
   await page.locator('#global-search').fill('');await page.locator('.workspace-greeting').waitFor();
   // Touch/desktop layouts, dialog overflow and reduced-motion preference.
-  for(const width of [320,390,768]) {
+  for(const width of [320,390,768,900]) {
     await page.setViewportSize({width,height:844});await nav('today');
     check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Premium dashboard overflows at '+width+'px');
     check(await page.locator('.mobile-tabs').evaluate(x=>{const r=x.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),'Floating phone navigation is outside the viewport at '+width+'px');
@@ -88,6 +88,26 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   const denied=await page.evaluate(async()=>{const r=await fetch('/api/portfolio');return r.status;});check(denied===403,'Owner overview API accepts a staff session');
   await capture('/premium-staff-workspace-desktop.png');
   await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.locator('#username').waitFor();await page.getByLabel('Username',{exact:true}).fill('pilot-owner');await page.getByLabel('Password',{exact:true}).fill('test-only-password');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.locator('.workspace-greeting').waitFor();
+  await page.setViewportSize({width:901,height:844});
+  check(await page.locator('.sidebar').isVisible()&&!await page.locator('.mobile-menu').isVisible(),'Desktop navigation is missing at the 901px breakpoint');
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Desktop breakpoint overflows at 901px');
+  await page.setViewportSize({width:1440,height:1100});
+  const touchContext=await page.context().browser().newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,storageState:await page.context().storageState()});
+  const touchPage=await touchContext.newPage(),touchErrors=[];touchPage.on('pageerror',error=>touchErrors.push(error.message));
+  try {
+    await touchPage.goto(page.url());await touchPage.locator('.workspace-greeting').waitFor();
+    for(const width of [320,390]){
+      await touchPage.setViewportSize({width,height:844});
+      check(await touchPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Actual touch layout overflows at '+width+'px');
+      check(await touchPage.getByRole('button',{name:'New bill',exact:true}).evaluate(x=>x.getBoundingClientRect().height>=44),'Phone billing action has an undersized touch target');
+    }
+    await touchPage.screenshot({path:out+'/premium-touch-phone-viewport.png'});
+    await touchPage.getByRole('button',{name:'Toggle navigation',exact:true}).tap();
+    check(await touchPage.locator('.sidebar').isVisible(),'Touch navigation did not open');
+    await touchPage.getByRole('button',{name:'Close navigation',exact:true}).tap({position:{x:380,y:420}});
+    check(!await touchPage.locator('.sidebar').isVisible(),'Touch navigation did not close');
+    check(touchErrors.length===0,'Touch browser exceptions: '+touchErrors.join('; '));
+  }finally{await touchContext.close();}
   const sizes=await page.evaluate(async()=>{const names=['premium.js','premium.css'];return Promise.all(names.map(async name=>{const r=await fetch('/'+name);return {name,bytes:(await r.arrayBuffer()).byteLength};}));});
   check(sizes.reduce((n,x)=>n+x.bytes,0)<110000,'New UI assets exceeded the local 110 KB regression budget');await fs.writeFile(out+'/premium-asset-sizes.json',JSON.stringify(sizes,null,2));
 }
