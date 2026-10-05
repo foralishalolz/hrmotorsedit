@@ -84,6 +84,20 @@ class RegionalWorkflows(unittest.TestCase):
         invoice=self.issued(vat_mode='none')
         self.assertEqual(invoice['document_title'],'INVOICE')
 
+    def test_regular_no_tax_cannot_hide_configured_gst_or_cess(self):
+        for gst, cess in [(18, 0), (0, 2)]:
+            draft=self.draft(vat_mode='none',items=[{'description':'Reviewed goods','qty':1,'rate':100,'tax_rate':gst,'cess_rate':cess,'hsn_sac':'8708'}])
+            self.assertEqual(draft['items'][0]['cess_rate'],cess)
+            with self.assertRaisesRegex(Problem,'no-tax bill'): self.action(draft,'issue')
+            self.assertEqual(self.get('invoices',draft['id'])['status'],'draft')
+        invoice=self.issued(vat_mode='none',items=[{'description':'Reviewed exempt service','qty':1,'rate':100,'tax_rate':0,'cess_rate':0,'hsn_sac':'998729'}])
+        self.assertEqual(invoice['totals_snapshot']['tax'],0)
+
+    def test_no_tax_draft_rejects_invalid_cess(self):
+        for cess in [-1, 'NaN', 'invalid']:
+            with self.assertRaises(Problem):
+                self.draft(vat_mode='none',items=[{'description':'Reviewed goods','qty':1,'rate':100,'tax_rate':0,'cess_rate':cess,'hsn_sac':'8708'}])
+
     def test_missing_hsn_and_address_block_issue(self):
         draft=self.draft(items=[{'description':'No HSN','rate':100,'qty':1}])
         with self.assertRaises(Problem): self.action(draft,'issue')

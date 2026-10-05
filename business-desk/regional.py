@@ -124,7 +124,7 @@ class RegionalFeatures:
             self.prepare_regional_document(conn, bid, data)
 
     def prepare_regional_document(self, conn, bid, data, issuing=False):
-        from domain import Problem, calculate
+        from domain import Problem, decimal
         b = self.business(conn, bid)
         data['country'] = b.get('country', 'NP')
         data['currency'] = b.get('currency', 'NPR')
@@ -145,7 +145,7 @@ class RegionalFeatures:
                 for line in data.get('items', []):
                     if not re.fullmatch(r'\d{4}|\d{6}|\d{8}', str(line.get('hsn_sac', ''))):
                         raise Problem('Enter the reviewed HSN / SAC on every GST invoice line.')
-                if b['gst_registration'] == 'regular' and data.get('vat_mode') == 'none' and any(float(x.get('tax_rate', data.get('vat_rate', 0)) or 0) > 0 or float(x.get('cess_rate', 0) or 0) > 0 for x in data.get('items', [])):
+                if b['gst_registration'] == 'regular' and data.get('vat_mode') == 'none' and any(decimal(x.get('tax_rate', data.get('vat_rate', 0)), 'Line tax rate', 0, 100) > 0 or decimal(x.get('cess_rate', 0), 'Cess rate', 0, 100) > 0 for x in data.get('items', [])):
                     raise Problem('A no-tax bill cannot contain taxable GST rates. Review the line tax settings.')
             if len(str(data.get('customer_gstin', ''))) > 0: checked_gstin(data['customer_gstin'])
         data['document_title'] = ('TAX INVOICE' if data.get('vat_mode') != 'none' else 'BILL OF SUPPLY') if b['gst_registration'] != 'unregistered' else 'INVOICE'

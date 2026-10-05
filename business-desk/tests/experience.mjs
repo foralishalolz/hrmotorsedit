@@ -62,7 +62,7 @@ export async function verifyExperience({page,api,check,nav,close,formSave,out,fs
   await nav('customers');await page.getByRole('button',{name:'All customers',exact:false}).click();await page.locator(`[data-action="open"][data-id="${customer.id}"]`).first().click();await page.getByRole('button',{name:'Edit',exact:true}).click();
   await page.getByLabel('Fleet contract',{exact:true}).fill('FLEET-TEST-01');await page.locator('[form="record-form"]').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
   state=await api('state?business='+retail);check(state.records.customers[0].custom_fields.fleet_contract==='FLEET-TEST-01','Business custom field did not persist');
-  await nav('today');await page.keyboard.press('Control+k');await page.getByLabel('Search commands and records',{exact:true}).fill('Fictional Aarav');await page.locator('#command-results button').first().click();
+  await nav('today');await page.keyboard.press('Control+k');await page.locator('#command-search').fill('quick bill');check(await page.locator('#command-results').getByRole('button',{name:'Quick bill',exact:true}).count()===1,'Command actions are not searchable without matching case');await page.getByLabel('Search commands and records',{exact:true}).fill('Fictional Aarav');await page.locator('#command-results button').first().click();
   check(await page.getByRole('heading',{name:'Relationship timeline'}).count()===1,'Command search did not open customer');await close();
   await page.setViewportSize({width:390,height:844});
   check(await page.locator('.mobile-tabs').isVisible(),'Mobile quick navigation missing');

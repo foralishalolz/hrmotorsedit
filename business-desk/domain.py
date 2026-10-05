@@ -129,7 +129,8 @@ def calculate(data):
         amount = money(raw * (1 - pct / 100) * (1 - global_discount / 100))
         configured_percent=decimal(item.get('tax_rate', tax_rate), 'Line tax rate', 0, 100)
         percent = configured_percent if mode != 'none' else Decimal(0)
-        cess_rate = decimal(item.get('cess_rate', 0), 'Cess rate', 0, 100) if indian and mode != 'none' else Decimal(0)
+        configured_cess = decimal(item.get('cess_rate', 0), 'Cess rate', 0, 100) if indian else Decimal(0)
+        cess_rate = configured_cess if mode != 'none' else Decimal(0)
         combined_percent = percent + cess_rate
         if mode == 'included':
             line_net = money(amount / (1 + combined_percent / 100))
@@ -159,7 +160,7 @@ def calculate(data):
             'configured_tax_rate': number(configured_percent),
             'net': number(line_net), 'tax': number(line_tax), 'total': number(line_total),
             'cost': number(line_cost), 'discount_amount': number(raw - amount),
-            **({'tax_components': split, 'cess_rate': number(cess_rate)} if indian else {}),
+            **({'tax_components': split, 'cess_rate': number(cess_rate), 'configured_cess_rate': number(configured_cess)} if indian else {}),
         })
         net += line_net
         tax += line_tax
@@ -532,7 +533,7 @@ class Desk(RegionalFeatures, BusinessFeatures):
             if not data.get('customer_id'):
                 raise Problem('Choose a customer.')
             calculated = calculate(data)
-            data['items'] = [{**{k: v for k, v in x.items() if k not in ('net','tax','total','cost','discount_amount','configured_tax_rate')},'tax_rate':x['configured_tax_rate']} for x in calculated['lines']]
+            data['items'] = [{**{k: v for k, v in x.items() if k not in ('net','tax','total','cost','discount_amount','configured_tax_rate','configured_cess_rate')},'tax_rate':x['configured_tax_rate'],**({'cess_rate':x['configured_cess_rate']} if 'configured_cess_rate' in x else {})} for x in calculated['lines']]
             data['status'] = 'draft'
             for line in data['items']:
                 if line.get('item_id'):

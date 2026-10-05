@@ -109,6 +109,7 @@ try{
   await nav('today');await page.getByRole('button',{name:'Dismiss notification'}).click();await page.screenshot({path:path.join(out,'dashboard-desktop.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'dashboard-phone.png'),fullPage:true});
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Phone dashboard overflows viewport');
+  check(await page.locator('.stat-amount').evaluateAll(nodes=>nodes.every(x=>x.scrollWidth<=x.clientWidth+1)),'Phone financial amounts do not fit their cards');
   await page.getByRole('button',{name:'New bill',exact:true}).click();
   await page.locator('#field-customer_id').selectOption(customer.id);
   await page.locator('[data-col="description"]').fill('Phone-entered service');
