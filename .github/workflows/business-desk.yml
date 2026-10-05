@@ -18,7 +18,7 @@ jobs:
       run:
         working-directory: business-desk
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -37,7 +37,7 @@ jobs:
       run:
         working-directory: business-desk
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t business-desk:test business-desk
       - run: |
           docker run -d --name desk-test -p 127.0.0.1:8765:8080 -e DESK_PUBLIC_ORIGIN=https://desk.example.test -e DESK_SETUP_KEY=fictional-ci-setup-key-32-characters-only business-desk:test
@@ -94,7 +94,7 @@ jobs:
       run:
         working-directory: business-desk
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
