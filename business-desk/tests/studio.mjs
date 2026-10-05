@@ -50,7 +50,7 @@ export async function verifyStudio({page,api,check,nav,close,formSave,out,fs}){
  await nav('money');await page.locator('[data-action=tab][data-kind=opening_balances]').click();
  await formSave('opening_balances',{customer_id:customer.id,amount:'500',date:state.today,source_reference:'Approved ledger 1',reconciled:true});
  state=await api('state?business='+bid);const opening=state.records.opening_balances[0];await page.locator(`[data-action=open][data-kind=opening_balances][data-id="${opening.id}"]`).first().click();
- await page.getByRole('button',{name:'Record receipt',exact:true}).click();await page.getByLabel('Amount, NPR',{exact:true}).fill('200');
+ await page.getByRole('button',{name:'Record receipt',exact:true}).click();await page.locator('#field-amount').fill('200');
  await page.locator('[form=record-form][type=submit]').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
  state=await api('state?business='+bid);check(state.records.opening_balances[0]._balance===300,'Opening receipt did not clear balance');
  await nav('customers');await page.locator(`[data-action=open][data-kind=customers][data-id="${customer.id}"]`).first().click();await page.getByRole('button',{name:'Account statement',exact:false}).click();

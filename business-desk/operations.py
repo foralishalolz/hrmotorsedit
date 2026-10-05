@@ -227,6 +227,7 @@ class OperationsFeatures:
 
     def customer_statement(self,user,bid,cid):
         from domain import money,number
+        for kind in ('customers','invoices','opening_balances','payments','credits'): self.permitted(user,kind)
         state=self.state(user,bid);customer=next((x for x in state['records']['customers'] if x['id']==cid),None)
         if customer is None:
             from domain import Problem

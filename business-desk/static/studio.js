@@ -124,7 +124,7 @@ function inspectionEditor(job){
  $('#inspection-save').onclick=async event=>{event.target.disabled=true;try{const inspection=$$('.inspection-row').map(el=>({area:$('[data-inspect-area]',el).value,condition:$('[data-inspect-condition]',el).value,notes:$('[data-inspect-notes]',el).value,recommendation:$('[data-inspect-recommendation]',el).value}));await api('record',{business_id:S.bid,kind:'jobs',id:job.id,version:job.version,data:{inspection}});$('#editor').close();await reload();toast('Inspection findings saved.');}catch(error){formError(error.message);event.target.disabled=false;}};
 }
 function operationsRecordButtons(kind,record){
- if(kind==='customers')return `<button class="btn" data-action="customer-statement" data-id="${record.id}">${icon('money')} Account statement</button>${owner()?`<button class="btn" data-action="agreed-prices" data-id="${record.id}">Agreed prices</button>`:''}`;
+ if(kind==='customers')return `${['invoices','payments','credits','opening_balances'].every(k=>S.state.permissions.read.includes(k))?`<button class="btn" data-action="customer-statement" data-id="${record.id}">${icon('money')} Account statement</button>`:''}${owner()?`<button class="btn" data-action="agreed-prices" data-id="${record.id}">Agreed prices</button>`:''}`;
  if(kind==='opening_balances'&&can('payments')&&Math.abs(record._balance)>.009)return `<button class="btn primary" data-action="opening-payment" data-id="${record.id}">Record ${record._balance>0?'receipt':'refund'}</button>`;
  if(kind==='jobs'&&can('jobs'))return `<button class="btn" data-action="inspection" data-id="${record.id}">${icon('workshop')} Inspection</button>`;
  return '';

@@ -30,7 +30,7 @@ ROLE_READ = {
     'owner': KINDS,
     'manager': KINDS - {'payroll', 'commissions'},
     'frontdesk': {'customers', 'assets', 'services', 'quotes', 'jobs', 'claims',
-                  'external_quotes', 'invoices', 'payments', 'allocations', 'appointments', 'followups', 'contracts', 'leads', 'vehicles', 'employees'},
+                  'external_quotes', 'invoices', 'payments', 'allocations', 'appointments', 'followups', 'contracts', 'leads', 'vehicles', 'employees', 'opening_balances'},
     'technician': {'jobs', 'time_entries', 'attendance', 'employees'},
     'cashier': {'customers', 'invoices', 'payments', 'allocations', 'credits', 'expenses', 'followups', 'stock', 'supplier_bills', 'supplier_payments', 'suppliers', 'opening_balances','cash_closures'},
     'stock_clerk': {'stock','movements','suppliers','purchases','supplier_bills','services'},
@@ -38,7 +38,7 @@ ROLE_READ = {
 ROLE_WRITE = {
     'owner': KINDS,
     'manager': ROLE_READ['manager'] - {'credits','opening_balances','cash_closures'},
-    'frontdesk': ROLE_READ['frontdesk'] - {'invoices', 'payments', 'allocations', 'vehicles', 'employees'},
+    'frontdesk': ROLE_READ['frontdesk'] - {'invoices', 'payments', 'allocations', 'vehicles', 'employees', 'opening_balances'},
     'technician': {'jobs', 'time_entries', 'attendance'},
     'cashier': {'invoices', 'payments', 'allocations', 'expenses', 'followups', 'supplier_payments','cash_closures'},
     'stock_clerk': {'stock','movements','suppliers','purchases','supplier_bills'},

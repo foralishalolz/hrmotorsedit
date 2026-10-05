@@ -329,7 +329,7 @@ function detailSummary(kind,record) {
 }
 function attachmentHTML(kind,record) {
   const attachments=S.state.attachments.filter(x=>x.record_id===record.id);
-  return `<div class="form-section"><h3>Original files & evidence</h3><p class="help-text">Photos, approvals, bills, and source documents stay inside your local backup. Each upload keeps a SHA-256 fingerprint.</p><div class="attachments">${attachments.map(x=>`<div class="file-row"><span>▤</span><a href="/api/attachment?business=${S.bid}&id=${x.id}">${e(x.filename)}</a><small class="muted">${e(x.hash.slice(0,10))}…</small></div>`).join('')}</div>${can(kind)?'<div class="field" style="margin-top:13px"><label for="attachment-input">Add an original file (up to 12 MB)</label><input id="attachment-input" type="file"></div>':''}</div>`;
+  return `<div class="form-section"><h3>Original files & evidence</h3><p class="help-text">Photos, approvals, bills and source documents are retained on your business server. Each upload keeps a SHA-256 fingerprint.</p><div class="attachments">${attachments.map(x=>`<div class="file-row"><span>▤</span><a href="/api/attachment?business=${S.bid}&id=${x.id}">${e(x.filename)}</a><small class="muted">${e(x.hash.slice(0,10))}…</small></div>`).join('')}</div>${can(kind)?`<div class="field" style="margin-top:13px"><label for="attachment-input">Add an original file (up to ${S.health?.cloud?'2.5':'12'} MB)</label><input id="attachment-input" type="file"></div>`:''}</div>`;
 }
 function relatedHTML(kind,record) {
   const relations=[];
@@ -406,7 +406,8 @@ function openRecord(kind,id) {
 }
 async function uploadAttachment(event,record) {
   const file=event.target.files[0];if(!file)return;
-  if(file.size>12*1024*1024){formError('Choose a file smaller than 12 MB.');return;}
+  const fileLimit=S.health?.cloud?2_500_000:12*1024*1024;
+  if(file.size>fileLimit){formError(S.health?.cloud?'Choose a file smaller than 2.5 MB.':'Choose a file smaller than 12 MB.');return;}
   event.target.disabled=true;
   try {await api('attachment',{business_id:S.bid,record_id:record.id,filename:file.name,mime:file.type,content:await fileBase64(file)});await reload();openRecord(record.type,record.id);toast('Original file attached.');}catch(error){formError(error.message);}finally{event.target.disabled=false;}
 }
