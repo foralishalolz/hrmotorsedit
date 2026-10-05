@@ -27,7 +27,7 @@ jobs:
         env:
           KIT_PROFILE: ${{ inputs.profile }}
         run: python hosting/package.py --profile "$KIT_PROFILE" --output packages/operator-kits
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: business-desk-${{ inputs.profile }}-operator-kits
           path: business-desk/packages/operator-kits/

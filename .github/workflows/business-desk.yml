@@ -25,7 +25,7 @@ jobs:
       - run: python -m unittest -v
       - run: python -m py_compile domain.py business.py regional.py operations.py insights.py branding.py analytics.py cloud_auth.py server.py hosted.py admin.py cloud.py api/index.py
       - run: python hosting/package.py --profile all --output packages/ci
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: business-desk-clean-operator-kits
           path: business-desk/packages/ci/
@@ -52,7 +52,7 @@ jobs:
       - run: python tests/run_browser.py
         env:
           DESK_AGENT_BROWSER: node_modules/.bin/agent-browser
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: business-desk-browser-evidence
