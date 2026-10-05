@@ -110,23 +110,31 @@ function toast(message,error=false) {
 }
 async function api(path,data) { return DeskSync.request(path,data); }
 async function rawApi(path,data) {
-  const response=await fetch('/api/'+path,{credentials:'same-origin',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':S.csrf},method:data===undefined?'GET':'POST',body:data===undefined?undefined:JSON.stringify(data)});
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000),userId=S.user?.id;
+  let response;
+  try {response=await fetch('/api/'+path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':S.csrf},method:data===undefined?'GET':'POST',body:data===undefined?undefined:JSON.stringify(data)});}
+  catch(error){if(error.name==='AbortError')throw new Error('The server took too long to reply. Check your connection and retry.');throw error;}
+  finally {clearTimeout(timeout);}
   let result;
   if (response.headers.get('Content-Type')?.includes('application/json')) result=await response.json();
   else result=await response.blob();
   if (!response.ok) {
-    if (response.status===401 && !['login','setup'].includes(path)) { S.needsLogin=true; renderAuth(false); }
+    if (response.status===401 && !['login','setup'].includes(path) && S.user?.id===userId) { S.needsLogin=true; renderAuth(false); }
     const error=new Error(result.error || 'Could not complete the operation.'); error.status=response.status; throw error;
   }
   return result;
 }
 async function reload() {
-  S.state=await DeskSync.state();
+  const businessId=S.bid,userId=S.user?.id,request=(S.reloadRequest||0)+1;S.reloadRequest=request;
+  const state=await DeskSync.state(businessId);
+  if(S.bid!==businessId||S.user?.id!==userId||request!==S.reloadRequest)return;
+  S.state=state;S.portfolioCache=null;
   S.businesses=S.businesses.map(x=>x.id===S.bid?S.state.business:x);
   if (S.tab && !S.state.permissions.read.includes(S.tab)) S.tab='';
   renderShell();
 }
 async function loadBusinesses() {
+  S.needsLogin=false;
   DeskSync.setUser(S.user);
   S.businesses=await api('businesses');
   const saved=localStorage.getItem('bd_business_'+S.user.id);
@@ -164,9 +172,11 @@ function renderShell() {
   const b=S.state.business; if(!visibleSections().some(([key])=>key===S.page)){S.page='today';S.tab='';} const section=sections[S.page] || sections.today;
   if (!visibleSections().some(([key])=>key===S.page)) { S.page='today'; S.tab=''; }
   $('#app').innerHTML=`<div class="layout"><aside class="sidebar"><div class="brand"><img src="${e(ownIcon(b))}" alt=""><div>${e(ownName(b))}<small>${e(b.speciality||profileChoices[b.profile]?.name||'Business workspace')}</small></div></div><label class="sr-only" for="business-picker" hidden>Active business</label><select id="business-picker" class="business-picker" aria-label="Active business">${S.businesses.map(x=>`<option value="${e(x.id)}" ${x.id===S.bid?'selected':''}>${e(ownName(x))}</option>`).join('')}</select><div class="nav-label">Workspace</div><nav aria-label="Main navigation">${visibleSections().filter(([key])=>key!=='settings').map(([key,value])=>`<button class="nav-button ${key===S.page?'active':''}" data-action="navigate" data-page="${key}"><span class="icon" aria-hidden="true">${value.icon}</span>${value.name}${key==='today'&&S.state.alerts.length?`<span class="nav-count">${S.state.alerts.length}</span>`:''}</button>`).join('')}</nav><div class="sidebar-bottom"><button class="nav-button ${S.page==='settings'?'active':''}" data-action="navigate" data-page="settings">${icon('settings')}Settings & backups</button><div class="plan-label">Free pilot <small>No charges</small></div><div class="local-pill"><span class="dot"></span>${S.health?.hosted?'Connected to your server':'Local business server'}</div><div class="profile"><span class="avatar">${e(S.user.name.slice(0,1).toUpperCase())}</span><div class="profile-text"><b>${e(S.user.name)}</b><small>${e(S.user.role)}</small></div><button class="icon-button" data-action="logout" title="Sign out" aria-label="Sign out">${icon('logout')}</button></div></div></aside><div class="workspace"><header class="topbar"><button class="icon-button mobile-menu" data-action="mobile-menu" aria-label="Toggle navigation">${icon('menu')}</button><div class="crumb">${e(ownName(b))} <span class="muted"> / </span> <strong>${e(section.name)}</strong></div><div class="topbar-tools"><button class="icon-button command-button" data-action="command" aria-label="Open command search" title="Search · Ctrl / Command K">${icon('command')}</button><label class="searchbox">${icon('search')}<input id="global-search" value="${e(S.query)}" placeholder="Search your business…" aria-label="Search records"><span class="kbd">/</span></label><button id="sync-indicator" class="sync-indicator" data-action="sync">Synced</button><span class="today-chip">${e(dateLabel(S.state.today))}</span><button class="btn small" data-action="refresh" title="Refresh records">${icon('refresh')} Refresh</button></div></header><main id="content" class="content"></main><nav class="mobile-tabs" aria-label="Quick navigation">${['today','customers','money','followups'].filter(key=>visibleSections().some(([k])=>key===k)).map(key=>`<button class="${S.page===key?'active':''}" data-action="navigate" data-page="${key}">${icon(key)}<span>${{today:'Home',customers:'Clients',money:'Billing',followups:'Actions'}[key]}</span></button>`).join('')}</nav></div></div>`;
-  $('#business-picker').addEventListener('change',async event=>{S.bid=event.target.value; S.query=''; S.filter=''; S.listQuery=''; localStorage.setItem('bd_business_'+S.user.id,S.bid); try {await reload();} catch(error){toast(error.message,true);} });
-  $('#global-search').addEventListener('input',event=>{S.query=event.target.value; renderContent();});
-  applyOwnedIdentity();renderContent(); DeskSync.updateIndicator();
+  $('#business-picker').addEventListener('change',async event=>{try {await switchBusiness(event.target.value);} catch(error){toast(error.message,true);} });
+  $('#global-search').addEventListener('input',event=>queueSearch(event.target.value));
+  applyOwnedIdentity();applyDisplay();renderContent(); DeskSync.updateIndicator();
+  $$('.nav-button.active').forEach(button=>button.setAttribute('aria-current','page'));
+  $('.mobile-menu').setAttribute('aria-expanded','false');
 }
 function pageHead(title,description,actions='',eyebrow='WORKSPACE') { return `<div class="pagehead"><div><div class="eyebrow">${eyebrow}</div><h1>${e(title)}</h1><p>${e(description)}</p></div><div class="actions">${actions}</div></div>`; }
 function stat(title,value,note='',accent=false) {
@@ -174,23 +184,20 @@ function stat(title,value,note='',accent=false) {
   const display=money?`<small class="stat-currency">${e(money[1])}</small><span class="stat-amount ${money[2].length>13?'compact':''}">${e(money[2])}</span>`:e(value);
   return `<div class="stat ${accent?'accent':''}"><div class="stat-label">${e(localLabel(title))}</div><div class="stat-value mono">${display}</div><div class="stat-note">${e(note)}</div></div>`;
 }
-function empty(title,text,button='') {return `<div class="empty"><div class="empty-icon">▤</div><h3>${e(title)}</h3><p>${e(text)}</p>${button}</div>`;}
+function empty(title,text,button='') {return `<div class="empty"><div class="empty-icon">${deskIcon('portfolio')}</div><h3>${e(title)}</h3><p>${e(text)}</p>${button}</div>`;}
 function renderContent() {
   if (S.query.trim()) { renderSearch(); return; }
   if (S.page==='today') {renderToday();$('#content').insertAdjacentHTML('afterbegin',studioSetupBanner());}
-  else if (S.page==='settings') renderSettings();
+  else if (S.page==='settings') {renderSettings();$('#content').insertAdjacentHTML('beforeend',displaySettingsCard());}
+  else if (S.page==='focus') renderFocus();
+  else if (S.page==='portfolio') renderPortfolio();
   else if (S.page==='reports') renderReports();
   else renderList();
 }
-function renderToday() { renderWorkspaceToday(); }
+function renderToday() { renderPremiumToday(); }
 function alertHTML(alert) {return `<li class="alert-row"><span class="alert-icon ${alert.priority===1?'urgent':''}" aria-hidden="true">${alert.priority===1?'!':'↗'}</span><div class="alert-text"><b>${e(alert.title)}</b><p>${e(alert.detail)}</p><small>${e(alert.last_note || alert.next_action)}</small></div><div class="actions"><button class="btn small" data-action="open" data-kind="${e(alert.type)}" data-id="${e(alert.record_id)}">Open</button>${can('followups')?`<button class="btn text small" data-action="follow-alert" data-key="${e(alert.key)}">Follow up</button>`:''}</div></li>`;}
 function renderSearch() {
-  const q=S.query.toLowerCase().trim();const results=[];
-  Object.entries(S.state.records).forEach(([kind,list])=>list.forEach(record=>{
-    const values=Object.entries(record).filter(([key,value])=>!key.startsWith('_')&&typeof value==='string'&&!/^(id|.*_id|.*_at)$/.test(key)).map(([,value])=>value).join(' ').toLowerCase();
-    if (values.includes(q)||label(record).toLowerCase().includes(q)) results.push({kind,record});
-  }));
-  $('#content').innerHTML=pageHead('Search your business',`${results.length} matching records for “${S.query}”`,'','SEARCH')+`<div class="card">${results.length?results.slice(0,100).map(({kind,record})=>`<div class="search-result"><div><button class="record-link" data-action="open" data-kind="${kind}" data-id="${record.id}">${e(label(record))}</button><div class="cell-sub">${e(models[kind]?.name||kind)} · ${e(record.number||record.date||'')}</div></div>${record.status?status(record.status):''}</div>`).join(''):empty('No records found','Try a customer, vehicle registration, invoice reference, or job title.')}</div>`;
+  renderPremiumSearch();
 }
 function valueCell(kind,record,key) {
   if (key==='balance') { const amount=customerMetrics(record).balance; return `<span class="mono ${amount<0?'negative':''}">${rupees(amount)}</span>`; }
@@ -583,7 +590,7 @@ function followAlert(key) {
   const alert=S.state.alerts.find(x=>x.key===key);if(!alert)return;
   const existing=rows('followups').find(x=>x.alert_key===key);
   const source=find(alert.type,alert.record_id);const customer=source?.customer_id?find('customers',source.customer_id):null;
-  let message=`Hello${customer?.name?' '+customer.name:''}, following up from ${S.state.business.name}. `;
+  let message=`Hello${customer?.name?' '+customer.name:''}, following up from ${ownName(S.state.business)}. `;
   if(alert.type==='invoices')message+=`Invoice ${source.number} has ${rupees(source._balance)} outstanding. Please confirm when payment can be made. Thank you.`;
   else if(alert.type==='quotes')message+=`Have you had a chance to review quotation ${source.number}, revision ${source.revision||1}, for ${rupees(source._totals.total)}? Please let us know whether you would like to proceed. Thank you.`;
   else if(alert.type==='jobs')message+=`We are checking the progress of ${source.name}. ${source.blocker?'Current update: '+source.blocker+'. ':''}We will confirm the next delivery update with you.`;
@@ -681,13 +688,14 @@ document.addEventListener('click',async event=>{
   const button=event.target.closest('[data-action]');if(!button||button.disabled)return;
   const {action,kind,id,page,operation,key}=button.dataset;
   try {
+    if(await premiumAction(button))return;
     if(await studioAction(button))return;
     if(action==='close'){$('#editor').close();return;}
     if(action==='reload-page'){location.reload();return;}
-    if(action==='mobile-menu'){$('.layout').classList.toggle('nav-open');return;}
+    if(action==='mobile-menu'){const open=$('.layout').classList.toggle('nav-open');button.setAttribute('aria-expanded',String(open));return;}
     if(action==='navigate'){S.page=page;S.tab='';S.query='';S.filter='';S.listQuery='';renderShell();return;}
     if(action==='tab'){S.tab=kind;S.filter='';S.listQuery='';renderContent();return;}
-    if(action==='refresh'){await reload();toast('Records refreshed.');return;}
+    if(action==='refresh'){button.disabled=true;try{await reload();toast('Records refreshed.');}finally{button.disabled=false;}return;}
     if(action==='new'){editRecord(kind);return;}
     if(action==='open'){openRecord(kind,id);return;}
     if(action==='edit'){editRecord(kind,id);return;}
@@ -721,11 +729,12 @@ document.addEventListener('click',async event=>{
     if(action==='csv'){const response=await fetch(`/api/export?business=${S.bid}&format=csv&kind=${kind}`);if(!response.ok)throw new Error('Could not export this list.');download(await response.blob(),`${kind}-${S.state.today}.csv`);return;}
     if(action==='legacy-import'){importDialog();return;}
     if(action==='legacy-help'){legacyHelp();return;}
-    if(action==='logout'){await DeskSync.logout();await api('logout',{});S.user=null;S.csrf='';S.state=null;S.query='';$('#editor').close();renderAuth(false);return;}
+    if(action==='logout'){await DeskSync.logout();await api('logout',{});S.user=null;S.csrf='';S.state=null;S.query='';S.portfolioCache=null;clearTimeout(S.searchTimer);$('#editor').close();renderAuth(false);return;}
   }catch(error){toast(error.message,true);}
 });
 document.addEventListener('keydown',event=>{if(event.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)&&!$('#editor').open){event.preventDefault();$('#global-search')?.focus();}if(event.key==='Escape'&&S.query&&!$('#editor').open){S.query='';$('#global-search').value='';renderContent();}});
 extendModels();
 extendExperienceModels();
 extendStudioModels();
+extendPremiumModels();
 init();

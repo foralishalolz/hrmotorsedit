@@ -29,7 +29,7 @@ from regional import INDIA_STATES, business_today
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
-APP_VERSION = '2.2.0-rc.1'
+APP_VERSION = '2.3.0-rc.1'
 
 
 def escaped(value):
@@ -241,6 +241,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.desk.sessions.pop(self.token(),None)
                     return self.respond({'ok':True},extra={'Set-Cookie':self.session_cookie('', 0)})
                 if path=='/api/businesses': return self.respond(self.desk.save_business(user,data) if write else self.desk.businesses(user))
+                if path=='/api/portfolio' and not write: return self.respond(self.desk.portfolio(user,get('offset') or 0))
                 if path=='/api/state' and not write: return self.respond(self.desk.state(user,bid))
                 if path=='/api/calculate' and write: return self.respond(calculate(data.get('data',{})))
                 if path=='/api/command' and write: return self.respond(self.desk.command(user,data))

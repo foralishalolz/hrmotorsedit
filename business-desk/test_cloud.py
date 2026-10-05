@@ -63,6 +63,17 @@ class HostedBoundary(unittest.TestCase):
         self.assertEqual(len(self.desk.users(self.user)),1)
     def test_foreign_record_reference_is_rejected(self):
         with self.assertRaises(Problem):self.desk.save(self.other,self.other_b['id'],'assets',{'data':{'name':'Foreign car','customer_id':self.c['id']}})
+    def test_owner_portfolio_is_scoped_on_postgres_and_gateway(self):
+        invoice=self.issue(self.draft())
+        self.worker.save(self.user,self.bid,'payments',{'data':{'invoice_id':invoice['id'],'amount':25,'date':today()}})
+        data=self.worker.portfolio(self.user)
+        self.assertEqual([b['id'] for b in data['businesses']],[self.bid])
+        self.assertEqual(data['businesses'][0]['outstanding'],75)
+        self.assertEqual(data['businesses'][0]['collected_month'],25)
+        with self.assertRaises(Problem):self.worker.portfolio({**self.user,'role':'manager'})
+        (status,_),body=self.wsgi('/api/portfolio',headers={'HTTP_COOKIE':'desk_session='+self.token})
+        self.assertTrue(status.startswith('200'),status)
+        self.assertEqual(body['businesses'][0]['id'],self.bid)
     def test_two_workers_replaying_one_receipt_post_once(self):
         inv=self.issue(self.draft())
         command=self.envelope('record',{'kind':'payments','id':uuid.uuid4().hex,'data':{'invoice_id':inv['id'],'date':today(),'amount':30,'method':'Cash'}})

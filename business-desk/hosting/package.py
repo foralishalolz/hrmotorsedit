@@ -14,13 +14,13 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = ('local', 'private-server', 'vercel', 'github')
 CORE = ['domain.py', 'business.py', 'regional.py', 'operations.py',
-        'branding.py', 'server.py']
+        'branding.py', 'insights.py', 'server.py']
 COMMON = ['README.md', 'SECURITY.md', 'VERIFICATION.md', 'hosting/README.md',
           'hosting/preflight.py', 'hosting/package.py']
 STATIC = ['app.css', 'app.js', 'bundle.css', 'experience.css', 'experience.js',
           'fonts.css', 'icon.svg', 'index.html', 'manifest.webmanifest',
           'print.css', 'print.js', 'studio.css', 'studio.js', 'sw.js',
-          'sync.js', 'workspace.css', 'workspace.js']
+          'sync.js', 'workspace.css', 'workspace.js', 'premium.css', 'premium.js']
 ROOT_SOURCE = set(CORE + COMMON + ['admin.py', 'hosted.py', 'cloud.py', 'Dockerfile',
                   '.dockerignore', '.gitignore', '.vercelignore', '.python-version',
                   'requirements.txt', 'requirements-vercel.txt', 'vercel.json',

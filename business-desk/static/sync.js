@@ -7,6 +7,7 @@ const DeskSync = (() => {
   const draftKinds = new Set(['customers', 'quotes', 'leads', 'followups', 'attendance']);
   let pending = [], snapshot = null, key = null, salt = null, userId = '', syncing = false;
   let lastOnline = 0;
+  let stateRequest = 0;
   let writerPromise = null, releaseWriter = null;
   const encoder = new TextEncoder(), decoder = new TextDecoder();
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -69,6 +70,7 @@ const DeskSync = (() => {
   }
   function setUser(user) {
     if (userId !== user.id) {
+      stateRequest++;
       if (pending.length) throw new Error('Sign in with the account that owns the pending changes first.');
       if (releaseWriter) releaseWriter(); releaseWriter = null; writerPromise = null;
       userId = user.id; key = null; salt = null; snapshot = null;
@@ -88,18 +90,21 @@ const DeskSync = (() => {
     });
     return result;
   }
-  async function state() {
+  async function state(businessId=S.bid) {
+    const requestedUser=userId,request=++stateRequest;
     let result;
     try {
-      result = await rawApi('state?business=' + encodeURIComponent(S.bid));
+      result = await rawApi('state?business=' + encodeURIComponent(businessId));
     } catch (error) {
-      if (error.status || !snapshot || snapshot.business.id !== S.bid) throw error;
+      if (error.status || !snapshot || snapshot.business.id !== businessId || userId!==requestedUser) throw error;
       if (Date.now()-lastOnline > 86400000) throw new Error('Connect and sign in to refresh this expired offline workspace.');
-      S.offline = true;
+      if(request===stateRequest&&businessId===S.bid)S.offline = true;
       return overlay(sanitise(snapshot));
     }
-    snapshot = result; lastOnline = Date.now(); S.offline = false;
-    try { await persist(); } catch { toast('The current records loaded, but this device could not save its offline copy.',true); }
+    if(request===stateRequest&&businessId===S.bid&&userId===requestedUser){
+      snapshot = result; lastOnline = Date.now(); S.offline = false;
+      try { await persist(); } catch { toast('The current records loaded, but this device could not save its offline copy.',true); }
+    }
     return overlay(result);
   }
   async function request(path, data) {
