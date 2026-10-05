@@ -1,6 +1,6 @@
 # Verification · 2.4.0-rc.1
 
-The owner analytics and optional Supabase email-auth update has **147 discovered tests**: **128 local** calculation/business/security/packaging checks and **19 disposable PostgreSQL** checks. The local suite passes; PostgreSQL/browser/container checks must pass on the exact published commit before this candidate is released. Live provider email delivery and deployment acceptance are separate checks.
+The owner analytics and optional Supabase email-auth update has **147 discovered tests**: **128 local** calculation/business/security/packaging checks and **19 disposable PostgreSQL** checks. [GitHub Actions run 37306474684](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37306474684) passed all four jobs on application commit `2de0b823dbfb9b1ca8c111fc4e6c7937d45bad1c`: 128 local checks, 19 real PostgreSQL checks, 144 Chromium assertions with zero uncaught errors, container health/Caddy and Vercel asset packaging. Release notes may be updated in a later documentation commit; the app source stays identical. Live provider email delivery and deployment acceptance are separate checks.
 
 The new regression cases cover profit versus cash, payroll/commission duplication, nonnegative cent allocations, credit cost reversals, credits to older bills, future receipts, opening balances, drafts, highest/lowest highlights beyond the 100-row table, missing wage/material costs, sample sizes, quality-review permissions and CSV formula escaping. Auth-boundary checks use fictional HTTP responses and never send a real email.
 
