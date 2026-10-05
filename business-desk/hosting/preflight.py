@@ -36,7 +36,7 @@ def checks(profile, env, environment='production', root=ROOT):
     if sys.version_info[:2] < version:
         problems.append(f'Python {version[0]}.{version[1]}+ is required for this profile.')
     required = ['domain.py', 'business.py', 'regional.py', 'operations.py',
-                'branding.py', 'server.py', 'static/index.html']
+                'branding.py', 'analytics.py', 'cloud_auth.py', 'server.py', 'static/index.html', 'static/analytics.js', 'static/cloud-auth.js']
     if profile == 'private-server':
         required += ['Dockerfile', 'deploy/compose.yaml', 'deploy/Caddyfile', 'hosted.py']
     if profile == 'vercel':
@@ -84,16 +84,25 @@ def checks(profile, env, environment='production', root=ROOT):
             url.port
         except ValueError:
             problems.append('DATABASE_URL syntax is invalid; its value has not been printed.')
-        for key in ('DESK_REGISTRATION_ENABLED', 'DESK_ALLOW_PREVIEW'):
+        for key in ('DESK_REGISTRATION_ENABLED', 'DESK_ALLOW_PREVIEW','DESK_EMAIL_AUTH'):
             if env.get(key, 'false') not in ('true', 'false'):
                 problems.append(key + ' must be exactly true or false.')
         if environment == 'production' and env.get('DESK_ALLOW_PREVIEW') == 'true':
             problems.append('Disable DESK_ALLOW_PREVIEW in production.')
         try:
-            if not 1 <= int(env.get('DESK_DB_POOL_SIZE', '4')) <= 16:
+            if not 1 <= int(env.get('DESK_DB_POOL_SIZE', '1')) <= 16:
                 raise ValueError()
         except ValueError:
             problems.append('DESK_DB_POOL_SIZE must be an integer from 1 to 16; measure provider limits.')
+        schema=env.get('DESK_DB_SCHEMA','public')
+        if not re.fullmatch(r'[a-z][a-z0-9_]{0,62}',schema) or schema in ('auth','storage','realtime','pg_catalog','information_schema') or schema.startswith('pg_'):
+            problems.append('DESK_DB_SCHEMA must be a dedicated application schema identifier.')
+        if env.get('DESK_EMAIL_AUTH')=='true':
+            from cloud_auth import SupabaseEmailAuth
+            try:SupabaseEmailAuth(env.get('SUPABASE_URL',''),env.get('SUPABASE_PUBLISHABLE_KEY',''))
+            except (ValueError,TypeError):problems.append('Set the intended Supabase HTTPS project URL and publishable/anon key. Secret keys are rejected.')
+            if schema=='public':problems.append('Use a private application schema for the Supabase edition.')
+            notes.append('Configure and test custom Auth SMTP and numeric-code templates; no email is sent by preflight.')
         if env.get('DATABASE_DIRECT_URL'):
             notes.append('Migration credentials are present in this operator environment; omit them from runtime deployment.')
         notes.append('Schema migration, runtime grants, preview isolation and provider restore still need operator verification.')

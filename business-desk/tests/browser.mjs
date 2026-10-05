@@ -1,3 +1,4 @@
+import {verifyAnalytics} from './analytics.mjs';
 import {verifyStudio} from './studio.mjs';
 import {verifyPremium} from './premium.mjs';
 import {verifyExperience} from './experience.mjs';
@@ -123,8 +124,9 @@ try{
   await verifyExperience({page,api,check,nav,close,formSave,out,fs});
   await verifyStudio({page,api,check,nav,close,formSave,out,fs});
   await verifyPremium({page,api,check,nav,close,formSave,out,fs});
+  await verifyAnalytics({page,api,check,nav,close,out,fs});
   check(errors.length===0,'Browser exceptions: '+errors.join('; '));
-  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering','dashboard-targets','focus-inbox','owner-portfolio','display-preferences','failed-business-switch','staff-ui-permissions','touch-layout','navigation-breakpoints','reduced-motion']},null,2));
+  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering','dashboard-targets','focus-inbox','owner-portfolio','display-preferences','failed-business-switch','staff-ui-permissions','touch-layout','navigation-breakpoints','reduced-motion','operating-analytics','analytics-export','profit-versus-cash','service-and-job-loss','client-patterns','team-quality-reviews','recommendation-followups','analytics-recovery','analytics-responsive','verified-email-ui-fixtures']},null,2));
   console.log(JSON.stringify({checks,errors,output:out}));
 }catch(error){
   await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});

@@ -29,7 +29,7 @@ from regional import INDIA_STATES, business_today
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
-APP_VERSION = '2.3.0-rc.1'
+APP_VERSION = '2.4.0-rc.1'
 
 
 def escaped(value):
@@ -220,10 +220,29 @@ class Handler(BaseHTTPRequestHandler):
                 result={'version':APP_VERSION,'setup_required':not self.desk.has_users(),'today':today(),'india_states':INDIA_STATES}
                 result.update(hosted=bool(getattr(self.server, 'public_origin', '')), setup_key_required=bool(getattr(self.server, 'setup_key', '')))
                 result.update(cloud=bool(getattr(self.desk,'cloud',False)), registration_enabled=bool(getattr(self.server,'registration_enabled',False)))
+                result['email_auth']=bool(getattr(self.server,'email_auth',None))
                 try:
                     user,csrf=self.desk.session(self.token()); result.update(user=self.desk.user_view(user),csrf=csrf)
                 except Problem: pass
                 return self.respond(result)
+            if path in ('/api/email-code','/api/email-login') and write:
+                provider=getattr(self.server,'email_auth',None)
+                if not provider or not getattr(self.desk,'cloud',False):raise Problem('Verified email sign-in is not configured.',404)
+                limiter=getattr(self.server,'auth_limiter',None)
+                if limiter:limiter(self.client_address[0])
+                from cloud_auth import normal_email
+                data=self.body();email=normal_email(data.get('email'))
+                if path=='/api/email-code':
+                    self.desk.auth_limit('email-code:'+email,3)
+                    eligible=self.desk.email_eligible(email)
+                    registration=bool(getattr(self.server,'registration_enabled',False)) and data.get('signup') is True
+                    if eligible or registration:provider.send_code(email,create_user=True)
+                    return self.respond({'message':'If this address is eligible, a sign-in code will arrive shortly. Check your email and spam folder.'})
+                self.desk.auth_limit('email-verify:'+email,10)
+                identity=provider.verify(email,data.get('code'))
+                token,result=self.desk.email_identity(identity,data.get('name',''),
+                    registration=bool(getattr(self.server,'registration_enabled',False)) and data.get('signup') is True)
+                return self.respond(result,extra={'Set-Cookie':self.session_cookie(token,min(3600,identity['ttl']))})
             if path in ('/api/setup','/api/login') and write:
                 limiter = getattr(self.server, 'auth_limiter', None)
                 if limiter: limiter(self.client_address[0])
@@ -242,6 +261,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond({'ok':True},extra={'Set-Cookie':self.session_cookie('', 0)})
                 if path=='/api/businesses': return self.respond(self.desk.save_business(user,data) if write else self.desk.businesses(user))
                 if path=='/api/portfolio' and not write: return self.respond(self.desk.portfolio(user,get('offset') or 0))
+                if path=='/api/analytics' and not write: return self.respond(self.desk.analytics(user,bid,get('start'),get('end')))
+                if path=='/api/analytics-export' and not write: return self.binary(self.desk.analytics_csv(user,bid,get('start'),get('end')),'text/csv; charset=utf-8','business-health.csv')
                 if path=='/api/state' and not write: return self.respond(self.desk.state(user,bid))
                 if path=='/api/calculate' and write: return self.respond(calculate(data.get('data',{})))
                 if path=='/api/command' and write: return self.respond(self.desk.command(user,data))
@@ -298,8 +319,11 @@ class Handler(BaseHTTPRequestHandler):
             body=file.read_bytes(); self.binary(body,(mimetypes.guess_type(file.name)[0] or 'application/octet-stream')+'; charset=utf-8')
         except Problem as error: self.respond({'error':str(error)},error.status)
         except (BrokenPipeError,ConnectionResetError): pass
-        except Exception:
-            traceback.print_exc()
+        except Exception as error:
+            if getattr(self.desk,'cloud',False):
+                import logging
+                logging.error('Business Desk operation failed (%s)',type(error).__name__)
+            else:traceback.print_exc()
             self.respond({'error':'The operation could not be confirmed. Retry the same operation in Sync before entering it again.' if getattr(self.desk,'cloud',False) else 'The operation could not be completed. Your saved records were retained. See the local server window for details.'},503 if getattr(self.desk,'cloud',False) else 500)
 
     def update_account(self,user,data):
@@ -309,12 +333,18 @@ class Handler(BaseHTTPRequestHandler):
             row=conn.execute('SELECT * FROM users WHERE id=?',(target,)).fetchone()
             if not row or row['organization_id']!=user.get('organization_id','local'): raise Problem('Account not found in your organisation.',404)
             if data.get('password'):
+                if getattr(self.desk,'cloud',False) and self.desk.email_account(target):raise Problem('This account uses verified email sign-in. Its owner can disable access.',409)
                 if target==user['id'] and not password_ok(str(data.get('current_password','')),row['password']): raise Problem('Current password is incorrect.')
                 if not 12<=len(str(data['password']))<=256: raise Problem('Use a password of 12 to 256 characters.')
                 conn.execute('UPDATE users SET password=? WHERE id=?',(password_hash(str(data['password'])),target))
             if 'active' in data:
                 if user['role']!='owner' or target==user['id']: raise Problem('You cannot disable your own account.')
                 conn.execute('UPDATE users SET active=? WHERE id=?',(int(bool(data['active'])),target))
+            if data.get('renew_email_invite') is True:
+                if user['role']!='owner' or not getattr(self.desk,'cloud',False):raise Problem('Only the owner can renew hosted email invitations.',403)
+                from datetime import datetime,timedelta,timezone
+                changed=conn.execute('UPDATE desk_email_invites SET expires=? WHERE user_id=?',(datetime.now(timezone.utc)+timedelta(days=7),target)).rowcount
+                if not changed:raise Problem('There is no pending email invitation for this account.',409)
         self.desk.invalidate_sessions(target,self.token())
         return {'ok':True}
 

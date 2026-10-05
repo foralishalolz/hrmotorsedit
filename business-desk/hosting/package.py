@@ -14,13 +14,13 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = ('local', 'private-server', 'vercel', 'github')
 CORE = ['domain.py', 'business.py', 'regional.py', 'operations.py',
-        'branding.py', 'insights.py', 'server.py']
+        'branding.py', 'insights.py', 'analytics.py', 'cloud_auth.py', 'server.py']
 COMMON = ['README.md', 'SECURITY.md', 'VERIFICATION.md', 'hosting/README.md',
           'hosting/preflight.py', 'hosting/package.py']
 STATIC = ['app.css', 'app.js', 'bundle.css', 'experience.css', 'experience.js',
           'fonts.css', 'icon.svg', 'index.html', 'manifest.webmanifest',
           'print.css', 'print.js', 'studio.css', 'studio.js', 'sw.js',
-          'sync.js', 'workspace.css', 'workspace.js', 'premium.css', 'premium.js']
+          'sync.js', 'workspace.css', 'workspace.js', 'premium.css', 'premium.js', 'analytics.js', 'analytics.css', 'cloud-auth.js']
 ROOT_SOURCE = set(CORE + COMMON + ['admin.py', 'hosted.py', 'cloud.py', 'Dockerfile',
                   '.dockerignore', '.gitignore', '.vercelignore', '.python-version',
                   'requirements.txt', 'requirements-vercel.txt', 'vercel.json',
@@ -33,7 +33,7 @@ SPECIFIC = {
     'vercel': ['hosted.py', 'cloud.py', 'api/index.py', 'api/requirements.txt',
                'requirements-vercel.txt', 'requirements.txt', '.python-version',
                'vercel.json', '.vercelignore', 'deploy/build_vercel.py',
-               'deploy/migrate_postgres.py'],
+               'deploy/migrate_postgres.py', 'deploy/setup_supabase.py'],
 }
 ROOT_SOURCE.update(name for names in SPECIFIC.values() for name in names)
 BLOCKED_PARTS = {'data', 'backups', 'verification', 'node_modules', '__pycache__',

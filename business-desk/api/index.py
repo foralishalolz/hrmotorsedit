@@ -9,6 +9,7 @@ from pathlib import Path
 from threading import Lock
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
+import re
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from server import Handler
@@ -26,7 +27,9 @@ class WSGIHandler(Handler):
 
 def allowed_origin(environ):
     configured=os.environ.get('DESK_PUBLIC_ORIGIN','').rstrip('/')
-    if not configured.startswith('https://') or urlparse(configured).path:
+    parsed=urlparse(configured)
+    if (parsed.scheme!='https' or not parsed.hostname or not re.fullmatch(r'[a-zA-Z0-9.-]+',parsed.hostname)
+        or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.port not in (None,443)):
         raise RuntimeError('Set the canonical HTTPS DESK_PUBLIC_ORIGIN.')
     known={configured}
     # Preview must explicitly opt in; a random Host header is never trusted.
@@ -44,10 +47,16 @@ def application(environ,start_response):
         origin=allowed_origin(environ)
         setup_key=os.environ.get('DESK_SETUP_KEY','')
         if len(setup_key)<32: raise RuntimeError('Set a private pilot setup key of at least 32 characters.')
+        email_auth=None
+        if os.environ.get('DESK_EMAIL_AUTH','false')=='true':
+            from cloud_auth import SupabaseEmailAuth
+            email_auth=SupabaseEmailAuth(os.environ.get('SUPABASE_URL',''),os.environ.get('SUPABASE_PUBLISHABLE_KEY',''))
         with _init_lock:
             if _desk is None:
                 from cloud import CloudDesk
-                _desk=CloudDesk(os.environ.get('DATABASE_URL',''),pool_size=int(os.environ.get('DESK_DB_POOL_SIZE','4')))
+                _desk=CloudDesk(os.environ.get('DATABASE_URL',''),pool_size=int(os.environ.get('DESK_DB_POOL_SIZE','1')),
+                    schema=os.environ.get('DESK_DB_SCHEMA','public'))
+        if email_auth and not _desk.email_ready:raise RuntimeError('Apply the reviewed email identity migration first.')
         _desk.local.organization_id='anonymous'
         raw_query=environ.get('QUERY_STRING','');query=parse_qs(raw_query)
         path=query.pop('desk_path',[environ.get('PATH_INFO','/')])[0]
@@ -58,6 +67,7 @@ def application(environ,start_response):
         handler=WSGIHandler.__new__(WSGIHandler)
         handler.server=SimpleNamespace(desk=_desk,public_origin=origin,server_port=443,
             setup_key=setup_key,registration_enabled=os.environ.get('DESK_REGISTRATION_ENABLED','false')=='true',
+            email_auth=email_auth,
             auth_limiter=lambda ip:_desk.auth_limit('ip:'+ip),max_request_bytes=3_900_000)
         handler.headers=Message()
         for key,value in environ.items():
@@ -78,8 +88,8 @@ def application(environ,start_response):
         from http import HTTPStatus
         start_response(f'{handler.status} {HTTPStatus(handler.status).phrase}',headers)
         return [body]
-    except Exception:
-        logging.exception('Business Desk hosted request failed')
+    except Exception as error:
+        logging.error('Business Desk hosted request failed (%s)',type(error).__name__)
         body=json.dumps({'error':'The hosted service is temporarily unavailable. Please retry. No local database is used as a fallback.'}).encode()
         start_response('503 Service Unavailable',[('Content-Type','application/json'),('Cache-Control','no-store'),('Retry-After','10'),('Content-Length',str(len(body)))])
         return [body]

@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest -v
-      - run: python -m py_compile domain.py business.py regional.py operations.py insights.py branding.py server.py hosted.py admin.py cloud.py api/index.py
+      - run: python -m py_compile domain.py business.py regional.py operations.py insights.py branding.py analytics.py cloud_auth.py server.py hosted.py admin.py cloud.py api/index.py
       - run: python hosting/package.py --profile all --output packages/ci
       - uses: actions/upload-artifact@v4
         with:
@@ -48,7 +48,7 @@ jobs:
           cache-dependency-path: business-desk/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: node --check static/premium.js && node --check static/studio.js && node --check static/experience.js && node --check static/app.js && node --check static/sync.js && node --check static/workspace.js
+      - run: node --check static/analytics.js && node --check static/cloud-auth.js && node --check tests/analytics.mjs && node --check static/premium.js && node --check static/studio.js && node --check static/experience.js && node --check static/app.js && node --check static/sync.js && node --check static/workspace.js
       - run: python tests/run_browser.py
         env:
           DESK_AGENT_BROWSER: node_modules/.bin/agent-browser

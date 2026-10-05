@@ -1,6 +1,6 @@
 # Hosting and running Business Desk
 
-One application, separate operating kits. Version 2.3.0-rc.1 is a tested pilot candidate; completing a package does not complete production acceptance.
+One application, separate operating kits. Version 2.4.0-rc.1 is a tested pilot candidate; completing a package does not complete production acceptance.
 
 | What you need | Folder | Database | Who can connect |
 |---|---|---|---|
@@ -12,6 +12,8 @@ One application, separate operating kits. Version 2.3.0-rc.1 is a tested pilot c
 
 **Start locally:** from the repository root, run `python3 business-desk/server.py --open`. For Windows use `business-desk/Start-Windows.bat`. Use the hosted options when a phone must reach the app. A phone's `localhost` is the phone itself.
 
+**Supabase database and email:** use the [Supabase operator guide](supabase/README.md) for a new private app schema, transaction-pooler runtime and verified email onboarding. The project must be selected and configured; the build does not provision it.
+
 **Start Vercel:** import this GitHub repository with **Root Directory = `business-desk`**, Framework = Other, production branch = `main`. Read the Vercel folder before deploying; it requires a durable database and a separate migration. The connected intended Vercel team previously returned 403; no live project or production database was created.
 
 ## Make separate downloadable folders
@@ -19,7 +21,7 @@ One application, separate operating kits. Version 2.3.0-rc.1 is a tested pilot c
 From the repository root:
 
 ```sh
-python3 business-desk/hosting/package.py --profile all --output business-desk/packages/release-2.3
+python3 business-desk/hosting/package.py --profile all --output business-desk/packages/release-2.4
 ```
 
 This produces four ZIPs, each with a `business-desk/` application folder, a file/hash manifest and an accompanying SHA-256 checksum. Extract the edition you need. Use a new output folder for each build: existing release files are deliberately not overwritten. The GitHub source edition needs a Git checkout and includes only tracked/staged app files plus the quality/package workflows. Runtime editions use an explicit source list. None includes a customer's database, backups, `.env`, development dependencies or generated `public/` output. The Vercel kit generates `public/` during its build.
