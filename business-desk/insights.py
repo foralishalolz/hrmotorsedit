@@ -63,7 +63,7 @@ def enrich_portfolio(records, day):
 
 class InsightsFeatures:
     def portfolio(self, user, offset=0):
-        from domain import KINDS, Problem, money, number, now
+        from domain import KINDS, STAGES, Problem, money, number, now
         if user['role'] != 'owner':
             raise Problem('Only the owner can view all-business totals.', 403)
         try:
@@ -100,7 +100,7 @@ class InsightsFeatures:
             if business.get('profile') == 'showroom':
                 work = sum(r.get('stage') not in ('lost', 'won', 'delivered') for r in records['leads'])
             else:
-                final = business['stages'][-1]
+                final = (business.get('stages') or STAGES)[-1]
                 work = sum(r.get('stage') != final for r in records['jobs'])
             # Cash-count review depends on additional expense-source fingerprints.
             # Omit it from the portfolio; the business's full Focus inbox retains it.

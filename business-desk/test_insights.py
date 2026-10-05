@@ -1,5 +1,6 @@
 """Owner scope, posted ledger arithmetic and dashboard settings boundaries."""
 from datetime import timedelta, date
+import json
 import tempfile
 import unittest
 
@@ -123,6 +124,15 @@ class OwnerInsights(unittest.TestCase):
         self.assertEqual([(x['record_id'],x['priority']) for x in alerts],[(high['id'],1)])
         for values in ({'priority':'secret'},{'task_category':'unknown'}):
             with self.assertRaises(Problem):self.save('followups',name='Invalid',**values)
+
+    def test_old_business_settings_can_open_owner_overview(self):
+        self.save('jobs',name='Previously recorded work',customer_id=self.c['id'],stage='Intake')
+        legacy={k:v for k,v in self.b.items() if k not in ('stages','dashboard_panels','monthly_collection_target')}
+        with self.desk.connect() as conn:
+            conn.execute('UPDATE businesses SET data=? WHERE id=?',(json.dumps(legacy),self.bid))
+        summary=self.summary()
+        self.assertEqual(summary['open_work'],1)
+        self.assertEqual(summary['monthly_collection_target'],0)
 
 
 if __name__=='__main__': unittest.main()

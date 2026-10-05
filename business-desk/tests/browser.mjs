@@ -124,7 +124,7 @@ try{
   await verifyStudio({page,api,check,nav,close,formSave,out,fs});
   await verifyPremium({page,api,check,nav,close,formSave,out,fs});
   check(errors.length===0,'Browser exceptions: '+errors.join('; '));
-  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering']},null,2));
+  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering','dashboard-targets','focus-inbox','owner-portfolio','display-preferences','failed-business-switch','staff-ui-permissions','touch-layout','navigation-breakpoints','reduced-motion']},null,2));
   console.log(JSON.stringify({checks,errors,output:out}));
 }catch(error){
   await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});
