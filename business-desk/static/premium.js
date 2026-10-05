@@ -115,12 +115,13 @@ function dashboardConfig() {
   if(!owner())throw new Error('Only the owner can configure this business dashboard.');
   const b=S.state.business;
   showDialog('Make the dashboard yours',`<form id="dashboard-form"><div id="form-error" class="form-error"></div><div class="configuration-business"><img src="${e(ownIcon(b))}" alt=""><div><b>${e(ownName(b))}</b><span>${e(profileChoices[b.profile]?.name||'Business workspace')}</span></div></div><div class="form-grid"><div class="field full"><label for="dashboard-goal">Your current business focus</label><input id="dashboard-goal" name="goal" value="${e(b.goal||'')}" maxlength="300" placeholder="For example, finish promised jobs and collect overdue bills"><small>Shown to your team as a shared focus.</small></div><div class="field full"><label for="dashboard-target">Monthly collection target, ${e(b.currency)}</label><input id="dashboard-target" name="target" type="number" step=".01" min="0" max="1000000000000" value="${Number(b.monthly_collection_target||0)}"><small>Compared with recorded receipts less refunds each calendar month. Set 0 to leave it off.</small></div></div><div class="form-section"><h3>Panels that help your business</h3><p class="help-text">Staff see panels supported by their role. Your choice applies to this business.</p><div class="dashboard-options">${Object.entries(panelNames).map(([key,title])=>`<label><input type="checkbox" name="panels" value="${key}" ${enabledPanel(key)?'checked':''}><span>${e(title)}</span></label>`).join('')}</div></div><div class="notice">For approval rules, stages, billing and client terms, use Guided configuration in Settings.</div></form>`,`<button class="btn" data-action="close">Cancel</button><button class="btn primary" type="submit" form="dashboard-form">Save dashboard</button>`,false,'Your name, your goals, your daily workflow.');
+  let savedBusiness=null;
   $('#dashboard-form').onsubmit=async event=>{
-    event.preventDefault();const form=event.target,button=$('[form=dashboard-form][type=submit]');button.disabled=true;
+    event.preventDefault();const form=event.target,button=$('[form=dashboard-form][type=submit]');if(button.disabled)return;button.disabled=true;
     try{
-      const values=new FormData(form);await api('businesses',{id:b.id,version:b.version,data:{goal:values.get('goal'),monthly_collection_target:Number(values.get('target')),dashboard_panels:values.getAll('panels')}});
-      $('#editor').close();await reload();toast('Your dashboard is ready.');
-    }catch(error){formError(error.message);}finally{button.disabled=false;}
+      if(!savedBusiness){const values=new FormData(form);savedBusiness=await api('businesses',{id:b.id,version:b.version,data:{goal:values.get('goal'),monthly_collection_target:Number(values.get('target')),dashboard_panels:values.getAll('panels')}});}
+      button.textContent='Applying dashboard…';await openSavedBusiness(savedBusiness);$('#editor').close();toast('Your dashboard is ready.');
+    }catch(error){if(savedBusiness){$$('input,select,textarea',form).forEach(control=>control.disabled=true);button.textContent='Open saved dashboard';}formError(error.message);}finally{button.disabled=false;}
   };
 }
 function readDisplay() {

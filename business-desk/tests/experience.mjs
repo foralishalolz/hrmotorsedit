@@ -57,7 +57,13 @@ export async function verifyExperience({page,api,check,nav,close,formSave,out,fs
   await page.locator('#field-workspace_name').fill('Pune Parts Desk');await page.locator('#field-brand_color').selectOption('blue');
   await page.getByRole('button',{name:'Add field',exact:false}).click();
   await page.getByLabel('Field area',{exact:true}).selectOption('customers');await page.getByLabel('Field label',{exact:true}).fill('Fleet contract');await page.getByLabel('Stable field key',{exact:true}).fill('fleet_contract');
-  await page.getByRole('button',{name:'Save personalisation',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
+  // A slow state response must leave the editor open until the new brand is ready.
+  let releaseState,observedState;const held=new Promise(resolve=>releaseState=resolve),observed=new Promise(resolve=>observedState=resolve);
+  const slowState=async route=>{observedState();await held;await route.continue();};
+  await page.route('**/api/state?business='+retail,slowState);
+  await page.getByRole('button',{name:'Save personalisation',exact:true}).click();await observed;
+  try{check(await page.locator('#editor').evaluate(x=>x.open),'Personalisation closed before the saved workspace was loaded');}finally{releaseState();}
+  await page.waitForFunction(()=>!document.querySelector('#editor').open);await page.unroute('**/api/state?business='+retail,slowState);
   check(await page.evaluate(()=>document.documentElement.dataset.brand)==='blue','Business accent was not applied');
   await nav('customers');await page.getByRole('button',{name:'All customers',exact:false}).click();await page.locator(`[data-action="open"][data-id="${customer.id}"]`).first().click();await page.getByRole('button',{name:'Edit',exact:true}).click();
   await page.getByLabel('Fleet contract',{exact:true}).fill('FLEET-TEST-01');await page.locator('[form="record-form"]').click();await page.waitForFunction(()=>!document.querySelector('#editor').open);
