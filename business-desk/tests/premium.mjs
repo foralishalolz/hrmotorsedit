@@ -1,5 +1,5 @@
 export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) {
-  const capture=async(file,fullPage=true)=>{await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:out+file,fullPage});};
+  const capture=async(file,fullPage=true)=>{while(await page.getByRole('button',{name:'Dismiss notification',exact:true}).count())await page.getByRole('button',{name:'Dismiss notification',exact:true}).first().click();await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:out+file,fullPage});};
   await page.setViewportSize({width:1440,height:1100});await nav('today');
   const bid=await page.evaluate(()=>S.bid);
   await page.getByRole('button',{name:'Personalise dashboard',exact:true}).click();
@@ -67,7 +67,7 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   for(const width of [320,390,768,900]) {
     await page.setViewportSize({width,height:844});await nav('today');
     check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Premium dashboard overflows at '+width+'px');
-    check(await page.locator('.mobile-tabs').evaluate(x=>{const r=x.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),'Floating phone navigation is outside the viewport at '+width+'px');
+    check(await page.locator('.mobile-tabs').evaluate(x=>{const r=x.getBoundingClientRect();return r.height>0&&r.top>=0&&r.bottom<=innerHeight;}),'Floating phone navigation is outside the viewport at '+width+'px');
     if(width===390){await capture('/premium-dashboard-phone.png');await capture('/premium-dashboard-phone-viewport.png',false);}
     await nav('focus');check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Focus inbox overflows at '+width+'px');
     if(width===390)await capture('/premium-focus-phone.png');

@@ -46,9 +46,11 @@ function workspaceOnboarding(profile='garage',draft={}){
   const read=()=>{const values=Object.fromEntries(new FormData($('#setup-business')));values.vat_registered=!!$('#field-vat_registered')?.checked;values.einvoice_required=!!$('#field-einvoice_required')?.checked;return values;};
   $$('[data-profile-choice]').forEach(button=>button.onclick=()=>workspaceOnboarding(button.dataset.profileChoice,{...read(),goal:''}));
   $('#setup-country').onchange=()=>{const next=read();next.vat_rate=next.country==='IN'?0:13;workspaceOnboarding(profile,next);};
+  let savedBusiness=null;
   $('#setup-business').onsubmit=async event=>{event.preventDefault();const button=$('[form="setup-business"]');button.disabled=true;try{
-    const result=await api('businesses',{data:{...read(),profile,quote_followup_days:2,payment_terms_days:7,print_style:'modern'}});S.bid=result.id;S.page='today';S.tab='';$('#editor').close();await loadBusinesses();toast('Workspace ready. Start with your first customer.');
-  }catch(error){formError(error.message);button.disabled=false;}};
+    savedBusiness=savedBusiness||await api('businesses',{data:{...read(),profile,quote_followup_days:2,payment_terms_days:7,print_style:'modern'}});
+    button.textContent='Opening workspace…';await openSavedBusiness(savedBusiness,'today');$('#editor').close();toast('Workspace ready. Start with your first customer.');
+  }catch(error){if(savedBusiness){$$('#setup-business input,#setup-business select,#setup-business textarea,[data-profile-choice]').forEach(control=>control.disabled=true);button.textContent='Open saved workspace';}formError(error.message);button.disabled=false;}};
 }
 
 function extendExperienceModels(){

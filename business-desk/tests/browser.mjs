@@ -126,5 +126,9 @@ try{
   check(errors.length===0,'Browser exceptions: '+errors.join('; '));
   await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering']},null,2));
   console.log(JSON.stringify({checks,errors,output:out}));
-}catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});console.error(error);console.error('PAGE ERRORS',errors);process.exitCode=1;}
+}catch(error){
+  await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});
+  const layout=await page.evaluate(()=>({width:innerWidth,height:innerHeight,page:S.page,business:S.state?.business?.profile,nodes:['.layout','.sidebar','.mobile-menu','.mobile-tabs','.workspace'].map(selector=>{const x=document.querySelector(selector);if(!x)return {selector,missing:true};const style=getComputedStyle(x),r=x.getBoundingClientRect();return {selector,display:style.display,visibility:style.visibility,position:style.position,transform:style.transform,rect:{x:r.x,y:r.y,width:r.width,height:r.height}};})})).catch(()=>null);
+  await fs.writeFile(path.join(out,'failure-layout.json'),JSON.stringify(layout,null,2));console.error(error);console.error('PAGE ERRORS',errors);process.exitCode=1;
+}
 finally{if(process.env.DESK_AGENT_BROWSER)await promisify(execFile)(process.env.DESK_AGENT_BROWSER,['close'],{timeout:10000}).catch(()=>{});await context.close().catch(()=>{});await browser.close();}
