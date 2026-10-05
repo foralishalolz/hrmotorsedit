@@ -32,4 +32,4 @@ Console recovery: `python3 admin.py --data-dir ./data reset-password --username 
 
 Local → private-server can use a reviewed full SQLite restore. Local → Vercel is a separately scoped migration: cloud organisation exports are not SQLite restore files, and no automatic full-history importer is implemented. Use the switching worksheet to reconcile supported master CSVs/openings or arrange a tested adapter before moving financial history.
 
-Check the running app: `python3 hosting/operations/check_health.py http://127.0.0.1:8765 --expect-version 2.2.0-rc.1`. Health does not replace the owner/staff acceptance flow.
+Check the running app: `python3 hosting/operations/check_health.py http://127.0.0.1:8765 --expect-version 2.4.0-rc.1`. Health does not replace the owner/staff acceptance flow.

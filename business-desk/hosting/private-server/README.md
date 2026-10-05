@@ -36,4 +36,4 @@ During an upgrade, stop new work after pending drafts are reconciled; back up, r
 
 `docker compose stop` stops services while retaining data. **Do not use `docker compose down -v` for routine stopping or upgrades**: it deletes the volumes. Never run the old application against an unknown newer schema as a rollback shortcut.
 
-Run `python3 ../hosting/operations/check_health.py https://desk.your-domain.com --expect-version 2.2.0-rc.1` from the deploy folder. Before live data, complete the [operations guide](../operations/README.md) and [release gates](../../docs/RELEASE_GATES.md). The [full private-server runbook](../../docs/DEPLOYMENT.md) remains the detailed reference.
+Run `python3 ../hosting/operations/check_health.py https://desk.your-domain.com --expect-version 2.4.0-rc.1` from the deploy folder. Before live data, complete the [operations guide](../operations/README.md) and [release gates](../../docs/RELEASE_GATES.md). The [full private-server runbook](../../docs/DEPLOYMENT.md) remains the detailed reference.
