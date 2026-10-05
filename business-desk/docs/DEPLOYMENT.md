@@ -15,7 +15,7 @@ Check the exact commit's CI first. Install Docker/Compose using the provider's s
 ```sh
 git clone https://github.com/foralishalolz/hrmotorsedit.git
 cd hrmotorsedit
-git switch codex/business-desk-pilot
+git switch main
 cd business-desk
 python3 deploy/configure.py desk.your-domain.com
 cd deploy
@@ -56,7 +56,7 @@ Restoring changes the database epoch. Devices with old queued operations must re
 5. Verify health, login, a draft quote, invoice balance, stock quantity and a backup.
 6. If a rollback is required, stop writes and preserve the failed-release database first. Restore the pre-upgrade backup with the matching previous image on a separate instance, verify it, then cut over. Do not run an old binary against an unknown newer schema.
 
-v1 backups migrate to schema v2. The original local source remains available through Git history.
+Supported v1/v2 backups migrate to schema v3. The original local source remains available through Git history.
 
 ## Monitoring and operating ownership
 

@@ -19,6 +19,8 @@ Python 3.10+ is sufficient for local use. No Node installation or cloud subscrip
 - [Pilot acceptance and remaining release gates](business-desk/docs/RELEASE_GATES.md)
 - [Verification evidence](business-desk/VERIFICATION.md)
 - [Security boundaries](business-desk/SECURITY.md)
+- [Full India/Nepal client workflow research](business-desk/research/README.md)
+- [Local, private-server, Vercel and GitHub operating kits](business-desk/hosting/README.md)
 
 GitHub hosts the source and review history. The Python service needs a persistent server for online use; it cannot run on GitHub Pages. No customer records, passwords, setup keys or database backups belong in this repository.
 

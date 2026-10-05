@@ -1,0 +1,34 @@
+name: Business Desk operator kits
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Operator kit to build (no deployment or migration)
+        required: true
+        default: all
+        type: choice
+        options: [all, local, private-server, vercel, github]
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: business-desk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest -q
+      - name: Create reviewed operator kits
+        env:
+          KIT_PROFILE: ${{ inputs.profile }}
+        run: python hosting/package.py --profile "$KIT_PROFILE" --output packages/operator-kits
+      - uses: actions/upload-artifact@v4
+        with:
+          name: business-desk-${{ inputs.profile }}-operator-kits
+          path: business-desk/packages/operator-kits/
+          retention-days: 14

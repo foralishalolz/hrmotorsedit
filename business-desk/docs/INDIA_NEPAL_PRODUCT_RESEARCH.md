@@ -1,5 +1,7 @@
 # Business Desk: sector product strategy for India and Nepal
 
+Historical 2.1 strategy. For the current 2.2 workflow/country/deployment analysis read the [research index](../research/README.md), [full client workflow](../research/workflows/FULL_CLIENT_WORKFLOW.md) and [hosting folders](../hosting/README.md). The later PostgreSQL edition supports application-scoped private organisations; the per-customer-stack statements below describe the older SQLite rollout, not that cloud adapter.
+
 Research date: 5 October 2026 (India time). Release: 2.1.0-rc.1.
 
 The owner confirmed: **all four business profiles, a free pilot with paid plans later, and offline drafts with server-confirmed financial posting**. This document distinguishes public evidence, product decisions, implemented behaviour and work that still needs customer validation. No customer interviews or willingness-to-pay results have been invented.

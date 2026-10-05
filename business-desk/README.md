@@ -31,6 +31,8 @@ Open `http://127.0.0.1:8765`, create your owner account, and choose a business p
 
 Read the [detailed India switching playbook](docs/INDIA_MARKET_AND_SWITCHING_PLAYBOOK.md), [Vercel runbook](docs/VERCEL_DEPLOYMENT.md), [India/Nepal product research](docs/INDIA_NEPAL_PRODUCT_RESEARCH.md) and [client discovery worksheet](docs/CLIENT_DISCOVERY_QUESTIONNAIRE.md).
 
+The [current country and sector research](research/README.md) includes a [full 21-section client workflow analysis](research/workflows/FULL_CLIENT_WORKFLOW.md), phone/PC journeys, exception diagnosis and feature priorities. Use the [separate hosting folders](hosting/README.md) and clean package builder for local, private-server, Vercel or GitHub source kits.
+
 ## Your daily workspace
 
 The first screen puts unpaid bills, receipts today, work or enquiries, and due actions together. Setup steps guide a new owner to a customer, catalogue/vehicle stock, and a first bill. Use **Settings → Choose workspace modules** to keep navigation relevant without deleting records.
