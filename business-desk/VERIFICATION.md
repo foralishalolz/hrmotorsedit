@@ -2,7 +2,15 @@
 
 Current release candidate: **2.2.0-rc.1**. This verifies a candidate, not a live Vercel deployment or completed business acceptance.
 
-## Current 2.2 evidence
+## India/Nepal operating-kit verification
+
+The 5 October 2026 research/hosting update adds 12 package/configuration checks to the unchanged application baseline below. Local discovery: **104 tests, 94 run successfully and 10 PostgreSQL-only tests skipped without their disposable URL**. An extracted GitHub source kit, initialised/staged as documented, passes the same suite.
+
+Clean ZIPs were built for local (58 source files), private-server (64), Vercel (66) and GitHub (90), excluding each ZIP's manifest. The extracted local edition starts with isolated data and returns the expected 2.2.0-rc.1 health; its health checker succeeds. The extracted Vercel edition packages `public/index.html`, omits the generic public manifest and includes no SQLite files. ZIP integrity, reproducible hashes, per-file manifests, private-file/untracked-data exclusion, required-source symlink rejection and non-overwriting release creation are checked. Placeholder/insecure configuration fails, and error output is redacted. New-guide local links and staged whitespace checks pass.
+
+GitHub's quality workflow additionally publishes clean operator-kit artifacts for 14 days; a manual package workflow is provided. Neither workflow deploys or migrates a live business. Real provider/platform acceptance remains outstanding.
+
+## Current 2.2 application evidence
 
 [GitHub Actions run 37272337114](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37272337114), application commit `5a0745ed5220be8ae46970dbd0a77ea3d5320655`, passed all four jobs:
 

@@ -1,0 +1,11 @@
+{
+  "templateOnly": true,
+  "launchApproved": false,
+  "applicationVersion": "2.2.0-rc.1",
+  "deployment": {"edition": "choose local, private-server or vercel", "commit": "", "deploymentIdOrImage": "", "canonicalOrigin": "", "operator": "", "organisationScope": "", "runtimeSchema": 3, "cloudSchemaIfApplicable": 1},
+  "businessAcceptance": {"country": "", "sector": "", "ownerAcceptedDate": "", "staffPhoneAndPCVerified": false, "openingBalancesAndStockReconciled": false, "collectionAndSameCommandRetryVerified": false, "permissionsAndOtherOrganisationVerified": false, "unsupportedWorkflowsExcludedOrHandled": false},
+  "billingAndPayroll": {"accountantReviewerReference": "", "countryBillingApplicabilityChecked": false, "nepalElectronicBillingApprovalAndCBMSDecisionReference": "", "indiaIRPAndSpecialTaxDecisionReference": "", "statutoryPayrollSystemReference": ""},
+  "recovery": {"backupProviderOrProtectedDestinationReference": "", "retentionDays": null, "agreedRPOHours": null, "agreedRTOHours": null, "isolatedRestoreDate": "", "measuredBackupAgeHours": null, "measuredRestoreMinutes": null, "balancesStockAttachmentsCompared": false, "oldSessionsAndQueuedCommandsReconciled": false},
+  "operations": {"supportOwner": "", "incidentContactReference": "", "accountRecoveryProcedureVerified": false, "independentReviewReference": "", "capacityMeasurementReference": "", "hostingBudgetApproved": false, "registrationPolicyVerified": false, "rollbackProcedureReference": ""},
+  "note": "Fill actual evidence privately. Never put passwords, setup keys, database URLs or customer records in this file."
+}

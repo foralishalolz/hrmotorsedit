@@ -7,9 +7,11 @@ __pycache__/
 .DS_Store
 .env
 .env.*
+!hosting/**/.env.example
 tmp*/
 verification/
 node_modules/
 
 public/
 .vercel/
+packages/

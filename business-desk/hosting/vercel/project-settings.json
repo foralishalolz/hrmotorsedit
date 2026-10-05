@@ -1,0 +1,15 @@
+{
+  "purpose": "Operator reference only; vercel.json is the canonical platform config",
+  "repository": "foralishalolz/hrmotorsedit",
+  "rootDirectory": "business-desk",
+  "productionBranch": "main",
+  "framework": "Other",
+  "buildCommand": "python3 deploy/build_vercel.py",
+  "outputDirectory": "public",
+  "pythonVersion": "3.12",
+  "region": "bom1",
+  "storage": "managed PostgreSQL with TLS, pooled runtime role and tested provider restore",
+  "migration": "operator-only python3 deploy/migrate_postgres.py using DATABASE_DIRECT_URL",
+  "requiredRuntimeVariables": ["DATABASE_URL", "DESK_PUBLIC_ORIGIN", "DESK_SETUP_KEY"],
+  "liveDeploymentCompleted": false
+}

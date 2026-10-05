@@ -7,3 +7,7 @@ __pycache__
 *.zip
 test_*.py
 tests
+packages
+research
+hosting
+docs
