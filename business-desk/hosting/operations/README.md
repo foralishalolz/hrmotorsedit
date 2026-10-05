@@ -18,7 +18,7 @@ The template has `launchApproved=false`. Fill actual evidence before setting it 
 | Before every upgrade | Backup, known image/deployment, schema compatibility, passing tests, short maintenance plan | Sync drafts, pause posting during cutover, accept representative work after update |
 | At an agreed recovery interval | Restore a real-shaped protected backup into an isolated environment and time it | Compare an independently selected bill, receipt balance, stock quantity and attachment |
 
-Use `python3 hosting/operations/check_health.py YOUR-HTTPS-ORIGIN`; add `--expect-cloud` for Vercel and `--expect-version 2.2.0-rc.1` for this candidate. The checker prints no accounts/CSRF material. A successful health response proves only the checked endpoint answered with the expected edition/version.
+Use `python3 hosting/operations/check_health.py YOUR-HTTPS-ORIGIN`; add `--expect-cloud` for Vercel and `--expect-version 2.4.0-rc.1` for this candidate. The checker prints no accounts/CSRF material. A successful health response proves only the checked endpoint answered with the expected edition/version.
 
 ## Recovery is different in each edition
 

@@ -1,6 +1,6 @@
 # Vercel deployment and operator runbook
 
-Candidate: 2.2.0-rc.1. This is a preparation/runbook, not evidence of a live deployment. The connected account's default team `webchatter` returned **403 Not authorized**. No project or database has been provisioned for this candidate. Restore the intended team connection before publishing there; do not deploy into another account as a workaround.
+Candidate: 2.4.0-rc.1. This is a preparation/runbook, not evidence of a live deployment. The connected account's default team `webchatter` returned **403 Not authorized**. No project or database has been provisioned for this candidate. Restore the intended team connection before publishing there; do not deploy into another account as a workaround.
 
 ## Architecture
 
