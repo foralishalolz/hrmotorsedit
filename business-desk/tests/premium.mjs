@@ -80,7 +80,7 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   check(await page.evaluate(()=>getComputedStyle(document.querySelector('.nav-button')).transitionDuration.split(',').every(x=>parseFloat(x)===0)),'Reduced-motion preference is ignored');
   await page.emulateMedia({reducedMotion:'no-preference'});await page.setViewportSize({width:1440,height:1100});
   // Exercise real staff authentication: incomplete financial roles get work views.
-  await api('account',{name:'Fictional Front Desk',username:'premium-frontdesk',password:'fictional-staff-password',role:'frontdesk',business_ids:[bid]});
+  await api('users',{name:'Fictional Front Desk',username:'premium-frontdesk',password:'fictional-staff-password',role:'frontdesk',business_ids:[bid]});
   await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.locator('#username').waitFor();
   await page.getByLabel('Username',{exact:true}).fill('premium-frontdesk');await page.getByLabel('Password',{exact:true}).fill('fictional-staff-password');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.locator('.workspace-greeting').waitFor();
   check(await page.locator('.sidebar [data-page=portfolio]').count()===0,'Staff can see owner portfolio navigation');
