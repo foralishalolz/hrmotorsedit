@@ -1,4 +1,5 @@
 export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) {
+  const capture=async(file,fullPage=true)=>{await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:out+file,fullPage});};
   await page.setViewportSize({width:1440,height:1100});await nav('today');
   const bid=await page.evaluate(()=>S.bid);
   await page.getByRole('button',{name:'Personalise dashboard',exact:true}).click();
@@ -22,7 +23,7 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   check(await page.locator('.focus-row').filter({hasText:'Prepare next client visit'}).count()===1,'Future task is not visible in planned work');
   await page.locator('#focus-search').fill('Prepare next');
   check(await page.locator('.focus-row').count()===1,'Focus search did not narrow planned tasks');
-  await page.screenshot({path:out+'/premium-focus-desktop.png',fullPage:true});
+  await capture('/premium-focus-desktop.png');
   await nav('today');
   // Record a real next date for a generated job issue, then read it back from data.
   const job=state.records.jobs[0];
@@ -35,7 +36,7 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   state=await api('state?business='+bid);
   check(state.records.followups.some(x=>x.alert_key==='blocked:'+job.id&&x.notes.includes('agreed date')),'Generated issue next step did not persist');
   check(!state.alerts.some(x=>x.key==='blocked:'+job.id),'Planned issue returned before its next date');
-  await page.screenshot({path:out+'/premium-dashboard-desktop.png',fullPage:true});
+  await capture('/premium-dashboard-desktop.png');
   await page.getByRole('button',{name:'Display preferences',exact:false}).click();
   await page.getByRole('radio',{name:/Solid surfaces/}).check();await page.getByRole('radio',{name:/Compact/}).check();
   await page.getByRole('button',{name:'Save display preferences',exact:true}).click();
@@ -48,7 +49,7 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   check(portfolio.businesses.length===4&&Object.keys(portfolio.totals).length===2,'Owner portfolio mixed currencies or omitted a business');
   check(await page.locator('.currency-summary').count()===2,'Owner currency summaries are not separate');
   check(await page.locator('.business-tile').filter({hasText:'Collision Craft'}).count()===1,'Owner overview lost business trading name');
-  await page.screenshot({path:out+'/premium-owner-overview-desktop.png',fullPage:true});
+  await capture('/premium-owner-overview-desktop.png');
   const retail=portfolio.businesses.find(x=>x.profile==='retail');
   await page.route('**/api/state?business='+retail.id,route=>route.abort());
   await page.locator(`[data-action=switch-business][data-business="${retail.id}"]`).click();
@@ -66,11 +67,12 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   for(const width of [320,390,768]) {
     await page.setViewportSize({width,height:844});await nav('today');
     check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Premium dashboard overflows at '+width+'px');
-    if(width===390)await page.screenshot({path:out+'/premium-dashboard-phone.png',fullPage:true});
+    check(await page.locator('.mobile-tabs').evaluate(x=>{const r=x.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),'Floating phone navigation is outside the viewport at '+width+'px');
+    if(width===390){await capture('/premium-dashboard-phone.png');await capture('/premium-dashboard-phone-viewport.png',false);}
     await nav('focus');check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Focus inbox overflows at '+width+'px');
-    if(width===390)await page.screenshot({path:out+'/premium-focus-phone.png',fullPage:true});
+    if(width===390)await capture('/premium-focus-phone.png');
     await nav('portfolio');await page.locator('.business-tile').first().waitFor();check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Owner overview overflows at '+width+'px');
-    if(width===390)await page.screenshot({path:out+'/premium-owner-overview-phone.png',fullPage:true});
+    if(width===390)await capture('/premium-owner-overview-phone.png');
   }
   await nav('today');await page.getByRole('button',{name:'Personalise dashboard',exact:true}).click();
   check(await page.locator('#editor').evaluate(x=>x.scrollWidth<=x.clientWidth+1),'Dashboard personalisation dialog overflows phone');await close();
@@ -84,7 +86,7 @@ export async function verifyPremium({page,api,check,nav,close,formSave,out,fs}) 
   check(await page.locator('.sidebar [data-page=portfolio]').count()===0,'Staff can see owner portfolio navigation');
   check(await page.locator('.collection-pulse').count()===0,'Incomplete financial role is shown a misleading collection dashboard');
   const denied=await page.evaluate(async()=>{const r=await fetch('/api/portfolio');return r.status;});check(denied===403,'Owner overview API accepts a staff session');
-  await page.screenshot({path:out+'/premium-staff-workspace-desktop.png',fullPage:true});
+  await capture('/premium-staff-workspace-desktop.png');
   await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.locator('#username').waitFor();await page.getByLabel('Username',{exact:true}).fill('pilot-owner');await page.getByLabel('Password',{exact:true}).fill('test-only-password');await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.locator('.workspace-greeting').waitFor();
   const sizes=await page.evaluate(async()=>{const names=['premium.js','premium.css'];return Promise.all(names.map(async name=>{const r=await fetch('/'+name);return {name,bytes:(await r.arrayBuffer()).byteLength};}));});
   check(sizes.reduce((n,x)=>n+x.bytes,0)<110000,'New UI assets exceeded the local 110 KB regression budget');await fs.writeFile(out+'/premium-asset-sizes.json',JSON.stringify(sizes,null,2));

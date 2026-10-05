@@ -11,10 +11,15 @@ from regional import business_today
 
 PANELS = ('focus', 'collections', 'sector', 'schedule', 'team', 'assistant')
 PAGE_SIZE = 24
+PORTFOLIO_KINDS = ('customers','quotes','jobs','claims','invoices','payments','credits',
+                   'allocations','stock','movements','purchases','attendance','followups',
+                   'appointments','contracts','opening_balances','leads','vehicles',
+                   'supplier_bills','supplier_payments')
 
 
 def validate_dashboard(data):
     from domain import Problem, decimal, money, number
+    data['goal'] = str(data.get('goal', '')).strip()[:300]
     data['monthly_collection_target'] = number(money(decimal(
         data.get('monthly_collection_target', 0), 'Monthly collection target', 0)))
     panels = data.get('dashboard_panels', list(PANELS))
@@ -78,9 +83,10 @@ class InsightsFeatures:
             if businesses:
                 ids = [b['id'] for b in businesses]
                 placeholders = ','.join('?' for _ in ids)
+                kinds = ','.join('?' for _ in PORTFOLIO_KINDS)
                 rows = conn.execute('SELECT r.* FROM records r JOIN businesses b ON b.id=r.business_id '
                                     'WHERE b.organization_id=? AND r.archived=0 AND r.business_id IN (' + placeholders + ') '
-                                    'ORDER BY r.created_at DESC', (org, *ids))
+                                    'AND r.kind IN (' + kinds + ') ORDER BY r.created_at DESC', (org, *ids, *PORTFOLIO_KINDS))
                 for row in rows: grouped[row['business_id']][row['kind']].append(self.unpack(row))
         result, totals = [], {}
         for business in businesses:

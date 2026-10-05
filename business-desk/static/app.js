@@ -111,18 +111,19 @@ function toast(message,error=false) {
 async function api(path,data) { return DeskSync.request(path,data); }
 async function rawApi(path,data) {
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000),userId=S.user?.id;
-  let response;
-  try {response=await fetch('/api/'+path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':S.csrf},method:data===undefined?'GET':'POST',body:data===undefined?undefined:JSON.stringify(data)});}
-  catch(error){if(error.name==='AbortError')throw new Error('The server took too long to reply. Check your connection and retry.');throw error;}
-  finally {clearTimeout(timeout);}
-  let result;
-  if (response.headers.get('Content-Type')?.includes('application/json')) result=await response.json();
-  else result=await response.blob();
-  if (!response.ok) {
-    if (response.status===401 && !['login','setup'].includes(path) && S.user?.id===userId) { S.needsLogin=true; renderAuth(false); }
-    const error=new Error(result.error || 'Could not complete the operation.'); error.status=response.status; throw error;
-  }
-  return result;
+  try {
+    const response=await fetch('/api/'+path,{credentials:'same-origin',cache:'no-store',signal:controller.signal,headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':S.csrf},method:data===undefined?'GET':'POST',body:data===undefined?undefined:JSON.stringify(data)});
+    const result=response.headers.get('Content-Type')?.includes('application/json')?await response.json():await response.blob();
+    if (!response.ok) {
+      if (response.status===401 && !['login','setup'].includes(path) && S.user?.id===userId) { S.needsLogin=true; renderAuth(false); }
+      const error=new Error(result.error || 'Could not complete the operation.');error.status=response.status;throw error;
+    }
+    return result;
+  }catch(error){
+    if(error.name==='AbortError')throw new Error('The server took too long to reply. Check your connection and retry.');
+    if(error.name==='TypeError'&&!error.status)throw new Error('Could not reach your business server. Check the connection and try again.');
+    throw error;
+  }finally{clearTimeout(timeout);}
 }
 async function reload() {
   const businessId=S.bid,userId=S.user?.id,request=(S.reloadRequest||0)+1;S.reloadRequest=request;
@@ -137,11 +138,11 @@ async function loadBusinesses() {
   S.needsLogin=false;
   DeskSync.setUser(S.user);
   S.businesses=await api('businesses');
-  const saved=localStorage.getItem('bd_business_'+S.user.id);
+  let saved;try{saved=localStorage.getItem('bd_business_'+S.user.id);}catch{}
   const requested=new URLSearchParams(location.search).get('business');
   S.bid=S.businesses.find(x=>x.id===(S.bid||requested||saved))?.id || S.businesses[0]?.id || '';
   if (!S.bid) { S.state=null; renderNoBusiness(); return; }
-  localStorage.setItem('bd_business_'+S.user.id,S.bid);
+  try{localStorage.setItem('bd_business_'+S.user.id,S.bid);}catch{}
   await reload();
 }
 async function init() {
@@ -171,7 +172,7 @@ function renderShell() {
   applyBusinessExperience();
   const b=S.state.business; if(!visibleSections().some(([key])=>key===S.page)){S.page='today';S.tab='';} const section=sections[S.page] || sections.today;
   if (!visibleSections().some(([key])=>key===S.page)) { S.page='today'; S.tab=''; }
-  $('#app').innerHTML=`<div class="layout"><aside class="sidebar"><div class="brand"><img src="${e(ownIcon(b))}" alt=""><div>${e(ownName(b))}<small>${e(b.speciality||profileChoices[b.profile]?.name||'Business workspace')}</small></div></div><label class="sr-only" for="business-picker" hidden>Active business</label><select id="business-picker" class="business-picker" aria-label="Active business">${S.businesses.map(x=>`<option value="${e(x.id)}" ${x.id===S.bid?'selected':''}>${e(ownName(x))}</option>`).join('')}</select><div class="nav-label">Workspace</div><nav aria-label="Main navigation">${visibleSections().filter(([key])=>key!=='settings').map(([key,value])=>`<button class="nav-button ${key===S.page?'active':''}" data-action="navigate" data-page="${key}"><span class="icon" aria-hidden="true">${value.icon}</span>${value.name}${key==='today'&&S.state.alerts.length?`<span class="nav-count">${S.state.alerts.length}</span>`:''}</button>`).join('')}</nav><div class="sidebar-bottom"><button class="nav-button ${S.page==='settings'?'active':''}" data-action="navigate" data-page="settings">${icon('settings')}Settings & backups</button><div class="plan-label">Free pilot <small>No charges</small></div><div class="local-pill"><span class="dot"></span>${S.health?.hosted?'Connected to your server':'Local business server'}</div><div class="profile"><span class="avatar">${e(S.user.name.slice(0,1).toUpperCase())}</span><div class="profile-text"><b>${e(S.user.name)}</b><small>${e(S.user.role)}</small></div><button class="icon-button" data-action="logout" title="Sign out" aria-label="Sign out">${icon('logout')}</button></div></div></aside><div class="workspace"><header class="topbar"><button class="icon-button mobile-menu" data-action="mobile-menu" aria-label="Toggle navigation">${icon('menu')}</button><div class="crumb">${e(ownName(b))} <span class="muted"> / </span> <strong>${e(section.name)}</strong></div><div class="topbar-tools"><button class="icon-button command-button" data-action="command" aria-label="Open command search" title="Search · Ctrl / Command K">${icon('command')}</button><label class="searchbox">${icon('search')}<input id="global-search" value="${e(S.query)}" placeholder="Search your business…" aria-label="Search records"><span class="kbd">/</span></label><button id="sync-indicator" class="sync-indicator" data-action="sync">Synced</button><span class="today-chip">${e(dateLabel(S.state.today))}</span><button class="btn small" data-action="refresh" title="Refresh records">${icon('refresh')} Refresh</button></div></header><main id="content" class="content"></main><nav class="mobile-tabs" aria-label="Quick navigation">${['today','customers','money','followups'].filter(key=>visibleSections().some(([k])=>key===k)).map(key=>`<button class="${S.page===key?'active':''}" data-action="navigate" data-page="${key}">${icon(key)}<span>${{today:'Home',customers:'Clients',money:'Billing',followups:'Actions'}[key]}</span></button>`).join('')}</nav></div></div>`;
+  $('#app').innerHTML=`<div class="layout"><aside class="sidebar" id="business-navigation"><div class="brand"><img src="${e(ownIcon(b))}" alt=""><div>${e(ownName(b))}<small>${e(b.speciality||profileChoices[b.profile]?.name||'Business workspace')}</small></div></div><label class="sr-only" for="business-picker" hidden>Active business</label><select id="business-picker" class="business-picker" aria-label="Active business">${S.businesses.map(x=>`<option value="${e(x.id)}" ${x.id===S.bid?'selected':''}>${e(ownName(x))}</option>`).join('')}</select><div class="nav-label">Workspace</div><nav aria-label="Main navigation">${visibleSections().filter(([key])=>key!=='settings').map(([key,value])=>`<button class="nav-button ${key===S.page?'active':''}" data-action="navigate" data-page="${key}"><span class="icon" aria-hidden="true">${value.icon}</span>${value.name}${key==='today'&&S.state.alerts.length?`<span class="nav-count">${S.state.alerts.length}</span>`:''}</button>`).join('')}</nav><div class="sidebar-bottom"><button class="nav-button ${S.page==='settings'?'active':''}" data-action="navigate" data-page="settings">${icon('settings')}Settings & backups</button><div class="plan-label">Free pilot <small>No charges</small></div><div class="local-pill"><span class="dot"></span>${S.health?.hosted?'Connected to your server':'Local business server'}</div><div class="profile"><span class="avatar">${e(S.user.name.slice(0,1).toUpperCase())}</span><div class="profile-text"><b>${e(S.user.name)}</b><small>${e(S.user.role)}</small></div><button class="icon-button" data-action="logout" title="Sign out" aria-label="Sign out">${icon('logout')}</button></div></div></aside><button class="nav-scrim" data-action="close-navigation" aria-label="Close navigation"></button><div class="workspace"><header class="topbar"><button class="icon-button mobile-menu" data-action="mobile-menu" aria-label="Toggle navigation" aria-controls="business-navigation" aria-expanded="false">${icon('menu')}</button><div class="crumb">${e(ownName(b))} <span class="muted"> / </span> <strong>${e(section.name)}</strong></div><div class="topbar-tools"><button class="icon-button command-button" data-action="command" aria-label="Open command search" title="Search · Ctrl / Command K">${icon('command')}</button><label class="searchbox">${icon('search')}<input id="global-search" value="${e(S.query)}" placeholder="Search your business…" aria-label="Search records"><span class="kbd">/</span></label><button id="sync-indicator" class="sync-indicator" data-action="sync">Synced</button><span class="today-chip">${e(dateLabel(S.state.today))}</span><button class="btn small" data-action="refresh" title="Refresh records">${icon('refresh')} Refresh</button></div></header><main id="content" class="content"></main><nav class="mobile-tabs" aria-label="Quick navigation">${['today','customers','money','followups'].filter(key=>visibleSections().some(([k])=>key===k)).map(key=>`<button class="${S.page===key?'active':''}" data-action="navigate" data-page="${key}">${icon(key)}<span>${{today:'Home',customers:'Clients',money:'Billing',followups:'Actions'}[key]}</span></button>`).join('')}</nav></div></div>`;
   $('#business-picker').addEventListener('change',async event=>{try {await switchBusiness(event.target.value);} catch(error){toast(error.message,true);} });
   $('#global-search').addEventListener('input',event=>queueSearch(event.target.value));
   applyOwnedIdentity();applyDisplay();renderContent(); DeskSync.updateIndicator();
@@ -186,6 +187,7 @@ function stat(title,value,note='',accent=false) {
 }
 function empty(title,text,button='') {return `<div class="empty"><div class="empty-icon">${deskIcon('portfolio')}</div><h3>${e(title)}</h3><p>${e(text)}</p>${button}</div>`;}
 function renderContent() {
+  const view=S.query.trim()?'search':S.page;if(S.contentView!==view){S.contentView=view;window.scrollTo(0,0);}
   if (S.query.trim()) { renderSearch(); return; }
   if (S.page==='today') {renderToday();$('#content').insertAdjacentHTML('afterbegin',studioSetupBanner());}
   else if (S.page==='settings') {renderSettings();$('#content').insertAdjacentHTML('beforeend',displaySettingsCard());}
@@ -598,7 +600,7 @@ function followAlert(key) {
   else message+=alert.next_action;
   showDialog('Record a useful follow-up',`<form id="follow-alert-form"><div id="form-error" class="form-error"></div><div class="notice"><b>${e(alert.title)}</b><p>${e(alert.detail)}</p><p>${e(alert.next_action)}</p></div>${customer?.phone?`<p class="help-text" style="margin-bottom:15px">Customer contact: <b>${e(customer.phone)}</b> · ${e(customer.preferred_channel||'Phone')}</p>`:''}${fieldHTML(['message','Suggested message — review before sharing','textarea'],message)}<button type="button" id="copy-followup" class="btn small" style="margin-bottom:20px">Copy message</button><div class="form-grid">${fieldHTML(['due_date','Next follow-up, AD','date'],addDays(S.state.today,customer?.reminder_days||S.state.business.quote_followup_days||1))}${fieldHTML(['status','Outcome','select',['waiting','open','completed']],existing?.status||'waiting')}${fieldHTML(['employee_id','Responsible employee','ref','employees'],existing?.employee_id||'')}${fieldHTML(['channel','Contacted through','select',['Phone','SMS','WhatsApp','Email','In person','Internal']],existing?.channel||'Phone')}${fieldHTML(['notes','What happened? / agreed next step','textarea'],existing?.notes||'')}</div><p class="help-text">Waiting actions return on the next due date. Completed reminders stay hidden today; an unresolved underlying issue can return tomorrow.</p></form>`,`<button class="btn" data-action="close">Cancel</button><button class="btn primary" type="submit" form="follow-alert-form">Save follow-up</button>`);
   $('#copy-followup').addEventListener('click',()=>copyText($('#field-message').value));
-  $('#follow-alert-form').addEventListener('submit',async event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.target));try{await api('record',{business_id:S.bid,kind:'followups',id:existing?.id,version:existing?.version,data:{...existing,...values,alert_key:key,name:alert.title,date:S.state.today,customer_id:source?.customer_id||'',job_id:alert.type==='jobs'?source.id:source?.job_id||'',next_action:alert.next_action}});$('#editor').close();await reload();toast('Follow-up saved with its next date.');}catch(error){formError(error.message);}});
+  $('#follow-alert-form').addEventListener('submit',async event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.target));try{await api('record',{business_id:S.bid,kind:'followups',id:existing?.id,version:existing?.version,data:{...existing,...values,alert_key:key,name:alert.title,date:S.state.today,customer_id:source?.customer_id||'',job_id:alert.type==='jobs'?source.id:source?.job_id||'',next_action:alert.next_action,task_category:existing?.task_category||categoryFor(alert.type),priority:existing?.priority||(alert.priority===1?'high':'normal')}});$('#editor').close();await reload();toast('Follow-up saved with its next date.');}catch(error){formError(error.message);}});
 }
 async function copyText(text) {
   try {await navigator.clipboard.writeText(text);toast('Message copied.');}
