@@ -4,16 +4,17 @@ This release is a pilot candidate, not a blanket claim that every SME workflow o
 
 | Gate | Required evidence | Current state |
 |---|---|---|
-| Financial and inventory rules | Passing tests for rounding, credits, duplicate retries, reservations, stock and payroll | 65 tests passed locally and in [CI run 37265352725](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37265352725); latest deployment commit must pass |
-| Real browser flows | Setup, billing, offline reload, conflicts, phone layout, no uncaught exceptions | 43 real Chromium assertions passed, with zero uncaught errors; desktop/phone screenshots inspected; see [verification](../VERIFICATION.md) and [PR #8 checks](https://github.com/foralishalolz/hrmotorsedit/pull/8/checks) |
-| Hosted runtime | Container builds, health check passes, HTTPS proxy config validates | Container build/health and proxy validation passed in CI; no live server/domain provisioned |
-| Recovery | Encrypted offsite backup and a timed restore to a separate instance | Local backups/restore implemented; offsite destination and drill required |
-| Organisation isolation | Separate customer stacks, restricted owners, role checks on staff devices | Separate-instance model documented; deployment/operator checks required |
-| Country billing acceptance | Accountant validates Nepal/India bill fields, registration, HSN/SAC, supply/tax treatment, fiscal numbering, retention and required IRD/CBMS/IRP integrations | Nepal VAT and ordinary domestic Indian GST configuration implemented; no tax-software approval or filing integration claimed |
-| Payroll acceptance | Accountant reviews applicable pay basis, withholding and contribution rules | Configurable reviewed payroll; no statutory engine |
-| Pilot usability | 3–5 real businesses complete their own observed daily workflows and reconciliations | Recruitment offered by owner; interviews and observation not yet performed |
-| Commercial operation | Chosen hosting budget, support coverage, data terms and pricing evidence | Market hypotheses documented; subscriptions/payment integration not implemented |
-| Security review | Review deployment, authentication, permissions, restores, offline storage and dependency updates | Hardening and tests included; independent security review outstanding |
+| Financial and inventory rules | Rounding, credits, retries, stock, reservations, payroll, opening balances and operating gates | 82 local tests pass; [2.2 application CI](https://github.com/foralishalolz/hrmotorsedit/actions/runs/37272337114) is green |
+| Real browser flows | UI → API → records → response, mobile layout and no uncaught exceptions | 61 Chromium assertions pass with 0 uncaught errors; desktop/phone evidence inspected; [verification](../VERIFICATION.md) |
+| PostgreSQL boundary | Two workers, persistent sessions, scoped organisations and concurrent writes | 10 real PostgreSQL tests pass in CI; actual Vercel acceptance remains outstanding |
+| Hosted runtime | Correct team/project, durable DB, HTTPS domain and known deployed commit | Container/proxy and WSGI/packaging checks pass; intended Vercel team returns 403 and no production database/project is provisioned |
+| Recovery | Protected offsite/provider backup and timed isolated restore | Local backup/recovery exists; hosted scoped export exists; offsite/provider restore drill required |
+| Organisation isolation | Owner, staff and different organisations tested on real infrastructure | Application-scoped PostgreSQL organisation tests pass; independent review and deployed staff-device verification required |
+| Country billing acceptance | Accountant verifies registration, classifications, supply/tax treatment, retention and needed government integrations | Ordinary domestic India GST and Nepal VAT supported; no filing/software approval claimed |
+| Payroll acceptance | Applicable pay basis, withholding, contribution and statutory provider review | Configurable reviewed calculation; no statutory filing or transfers |
+| Pilot usability | Real businesses complete their observed work and switching reconciliation | Detailed playbook/configuration provided; actual interviews and staff acceptance not performed |
+| Commercial operation | Hosting budget, support, data terms and evidenced packaging | Free pilot shown; no subscription integration; cost and pricing validation outstanding |
+| Security review | Authentication/recovery, tenancy, privacy/retention, dependencies, logs and recovery | Hardening/failure checks included; independent review and production operations outstanding |
 
 ## Pilot acceptance script
 
@@ -35,3 +36,7 @@ A blocking defect is any duplicate/missing money entry, incorrect stock, silent 
 ## Additional 2.1 acceptance
 
 Verify customer discounts and payment terms on actual catalogue items; review India intra/inter-state and composition samples; scan a known barcode; partially return a direct-sale item and reconcile credit, stock and any separate refund; customise a field and checklist in each profile. Confirm English UI suitability. Do not onboard live workflows requiring unsupported tax, vehicle returns, supplier returns or independent offline billing.
+
+## Additional 2.2 acceptance
+
+Configure the business identity, stages and real handover checks with the owner. Import a reviewed customer/catalogue source without writing during preview; reconcile opening balances and stock. Exercise a customer's quantity price and credit limit, collect an opening balance, check the statement, close cash and add a late cash expense to trigger review. Record an assigned technician inspection and verify a custom final stage ends work alerts. Verify both ordinary and exceptional owner-approved handover. On the actual Vercel deployment, use two organisations and two staff devices, then run the provider restore drill. English UI and supported tax/accounting boundaries must fit the chosen pilot.

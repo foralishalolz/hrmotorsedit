@@ -29,7 +29,7 @@ from regional import INDIA_STATES, business_today
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
-APP_VERSION = '2.1.0-rc.1'
+APP_VERSION = '2.2.0-rc.1'
 
 
 def escaped(value):
@@ -65,7 +65,9 @@ def print_document(desk, user, bid, kind, rid, style='classic', font='11'):
     if record.get('status')=='draft': warning='<div class="stamp">DRAFT · Review before issuing</div>'
     if kind=='external_quotes':
         warning = '<div class="stamp">HYPOTHETICAL COMPARISON · NOT A THIRD-PARTY QUOTATION</div>' if record.get('simulation') else '<div class="stamp">TRANSCRIBED COMPARISON · See the original issuer document</div>'
-    company = '<h1>'+escaped(business.get('name','Business Desk'))+'</h1><p>'+escaped(business.get('address',''))+'</p><p>'+escaped(business.get('phone',''))+' '+escaped(business.get('email',''))+'</p><p>'+('GSTIN: '+escaped(business.get('gstin','—')) if indian else 'PAN / VAT: '+escaped(business.get('pan','—')))+'</p>'
+    from branding import display_name
+    company = ('<img class="business-logo" alt="" src="'+escaped(business['logo_data'])+'">' if business.get('logo_data') else '')+'<h1>'+escaped(display_name(business))+'</h1><p>'+escaped(business.get('address',''))+'</p><p>'+escaped(business.get('phone',''))+' '+escaped(business.get('email',''))+'</p><p>'+('GSTIN: '+escaped(business.get('gstin','—')) if indian else 'PAN / VAT: '+escaped(business.get('pan','—')))+'</p>'
+    if business.get('trading_name') and business['trading_name']!=business.get('name'): company+='<p>Legal name: '+escaped(business['name'])+'</p>'
     if kind=='external_quotes': company='<h1>'+escaped(record.get('issuer','Comparison scenario'))+'</h1><p>Reference recorded by '+escaped(business.get('name'))+'</p>'
     heading = '<header><div>'+company+'</div><div class="document"><h2>'+title+'</h2><p>'+escaped(record.get('number') or record.get('reference') or 'Unnumbered draft')+'</p><p>AD: '+escaped(record.get('date') or business_today(business))+'</p>'
     if record.get('bs_date'): heading+='<p>BS: '+escaped(record['bs_date'])+' (entered)</p>'
@@ -128,6 +130,8 @@ def print_document(desk, user, bid, kind, rid, style='classic', font='11'):
         totals='<div class="totals"><p class="grand"><span>Amount</span><b>'+currency+' '+cash(record['amount'])+'</b></p></div><p class="words">'+escaped(words(record['amount']))+'</p>'
     terms=record.get('terms','')
     tail='<section class="notes">'+('<h3>Terms</h3><p>'+escaped(terms).replace('\n','<br>')+'</p>' if terms else '')+('<h3>Notes</h3><p>'+escaped(record['notes']).replace('\n','<br>')+'</p>' if record.get('notes') else '')+extra+'</section>'
+    if kind in ('quotes','invoices','payments','credits'):
+        tail+='<section class="notes">'+('<p>'+escaped(business.get('payment_instructions')).replace('\n','<br>')+'</p>' if business.get('payment_instructions') else '')+('<p>'+escaped(business.get('invoice_footer')).replace('\n','<br>')+'</p>' if business.get('invoice_footer') else '')+'</section>'
     return ('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'+escaped(title+' '+record.get('number',''))+'</title><link rel="stylesheet" href="/print.css"><style>:root{--print-size:'+str(size)+'pt}</style></head><body class="'+style+'"><nav class="printbar"><button id="print-button">Print / Save PDF</button><span>A4 · Review printer margins and preview before saving.</span></nav><main>'+warning+heading+context+table+totals+tail+'<footer><div>Prepared / authorised by<br><br>________________________</div><div>Customer / recipient<br><br>________________________</div></footer></main><script src="/print.js"></script></body></html>').encode()
 
 
@@ -196,7 +200,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.headers.get('Content-Type','').startswith('application/json'): raise Problem('JSON content is required.',415)
         try: length=int(self.headers.get('Content-Length','0'))
         except ValueError: raise Problem('Invalid request length.')
-        limit=145*1024*1024 if self.path=='/api/restore' else 18*1024*1024
+        limit=getattr(self.server,'max_request_bytes',145*1024*1024 if self.path=='/api/restore' else 18*1024*1024)
         if length<0 or length>limit: raise Problem('The uploaded data is too large.',413)
         try:
             data=json.loads(self.rfile.read(length))
@@ -215,6 +219,7 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/health' and not write:
                 result={'version':APP_VERSION,'setup_required':not self.desk.has_users(),'today':today(),'india_states':INDIA_STATES}
                 result.update(hosted=bool(getattr(self.server, 'public_origin', '')), setup_key_required=bool(getattr(self.server, 'setup_key', '')))
+                result.update(cloud=bool(getattr(self.desk,'cloud',False)), registration_enabled=bool(getattr(self.server,'registration_enabled',False)))
                 try:
                     user,csrf=self.desk.session(self.token()); result.update(user=self.desk.user_view(user),csrf=csrf)
                 except Problem: pass
@@ -249,6 +254,8 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/time' and write: return self.respond(self.desk.time_action(user,bid,data))
                 if path=='/api/payroll' and write: return self.respond(self.desk.prepare_payroll(user,bid,data))
                 if path=='/api/assistant' and write: return self.respond(self.desk.assistant(user,bid,str(data.get('question',''))[:2000]))
+                if path=='/api/import-preview' and write: return self.respond(self.desk.import_batch(user,bid,data,preview=True))
+                if path=='/api/customer-statement' and not write: return self.respond(self.desk.customer_statement(user,bid,get('customer')))
                 if path=='/api/attachment' and write: return self.respond(self.desk.attachment(user,bid,data))
                 if path=='/api/attachment' and not write:
                     item=self.desk.get_attachment(user,bid,get('id'))
@@ -257,7 +264,10 @@ class Handler(BaseHTTPRequestHandler):
                 if path=='/api/account' and write: return self.respond(self.update_account(user,data))
                 if path=='/api/backup' and write:
                     if user['role']!='owner': raise Problem('Only the owner can download the complete backup.',403)
-                    file=self.desk.backup(); return self.binary(file.read_bytes(),'application/vnd.sqlite3',file.name)
+                    file=self.desk.backup(user=user)
+                    try: return self.binary(file.read_bytes(),'application/json' if file.suffix=='.json' else 'application/vnd.sqlite3',file.name)
+                    finally:
+                        if getattr(self.desk,'cloud',False): file.unlink(missing_ok=True)
                 if path=='/api/restore' and write:
                     try: content=base64.b64decode(data.get('content',''),validate=True)
                     except Exception: raise Problem('Invalid backup content.')
@@ -276,6 +286,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self.binary(body,'text/html; charset=utf-8')
                 raise Problem('This endpoint does not exist.',404)
             if write: raise Problem('This endpoint does not exist.',404)
+            if path=='/manifest.webmanifest' and get('business'):
+                from branding import manifest
+                user=self.user();bid=get('business');self.desk.business_allowed(user,bid)
+                with self.desk.connect() as conn: business=self.desk.business(conn,bid)
+                return self.binary(json.dumps(manifest(business),ensure_ascii=False).encode(),'application/manifest+json')
             requested='index.html' if path=='/' else path.lstrip('/')
             file=(STATIC/requested).resolve()
             if not file.is_relative_to(STATIC.resolve()) or not file.is_file(): raise Problem('File not found.',404)
@@ -284,14 +299,14 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError,ConnectionResetError): pass
         except Exception:
             traceback.print_exc()
-            self.respond({'error':'The operation could not be completed. Your saved records were retained. See the local server window for details.'},500)
+            self.respond({'error':'The operation could not be confirmed. Retry the same operation in Sync before entering it again.' if getattr(self.desk,'cloud',False) else 'The operation could not be completed. Your saved records were retained. See the local server window for details.'},503 if getattr(self.desk,'cloud',False) else 500)
 
     def update_account(self,user,data):
         target=data.get('id') or user['id']
         if target!=user['id'] and user['role']!='owner': raise Problem('Only the owner can manage another account.',403)
         with self.desk.transaction() as conn:
             row=conn.execute('SELECT * FROM users WHERE id=?',(target,)).fetchone()
-            if not row: raise Problem('Account not found.',404)
+            if not row or row['organization_id']!=user.get('organization_id','local'): raise Problem('Account not found in your organisation.',404)
             if data.get('password'):
                 if target==user['id'] and not password_ok(str(data.get('current_password','')),row['password']): raise Problem('Current password is incorrect.')
                 if not 12<=len(str(data['password']))<=256: raise Problem('Use a password of 12 to 256 characters.')
@@ -299,8 +314,7 @@ class Handler(BaseHTTPRequestHandler):
             if 'active' in data:
                 if user['role']!='owner' or target==user['id']: raise Problem('You cannot disable your own account.')
                 conn.execute('UPDATE users SET active=? WHERE id=?',(int(bool(data['active'])),target))
-        for token,session in list(self.desk.sessions.items()):
-            if session['user_id']==target and token!=self.token(): self.desk.sessions.pop(token,None)
+        self.desk.invalidate_sessions(target,self.token())
         return {'ok':True}
 
     def export(self,user,bid,fmt,kind):

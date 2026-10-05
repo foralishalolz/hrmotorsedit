@@ -1,3 +1,4 @@
+import {verifyStudio} from './studio.mjs';
 import {verifyExperience} from './experience.mjs';
 import {createRequire} from 'node:module';
 import {execFile} from 'node:child_process';
@@ -25,12 +26,12 @@ async function formSave(kind,values={}){
   await page.locator(`[data-action="new"][data-kind="${kind}"]`).first().click();
   for(const [key,value] of Object.entries(values)){
     const input=page.locator('#field-'+key);
-    if(await input.evaluate(node=>node.tagName)==='SELECT')await input.selectOption(value);else await input.fill(value);
+    if(typeof value==='boolean')await input.setChecked(value);else if(await input.evaluate(node=>node.tagName)==='SELECT')await input.selectOption(value);else await input.fill(value);
   }
   await page.locator('[form="record-form"][type="submit"]').click();
   await page.waitForFunction(()=>!document.querySelector('#editor').open);
 }
-async function nav(name){await page.locator(`.sidebar [data-action="navigate"][data-page="${name}"]`).click();}
+async function nav(name){const button=page.locator(`.sidebar [data-action="navigate"][data-page="${name}"]`);if(!await button.isVisible())await page.locator('[data-action=mobile-menu]').click();await button.click();}
 async function close(){if(await page.locator('#editor').evaluate(x=>x.open))await page.locator('#editor [data-action="close"]').last().click();}
 try{
   await page.goto(base);
@@ -119,8 +120,9 @@ try{
   await page.screenshot({path:path.join(out,'billing-phone.png'),fullPage:true});
   await close();
   await verifyExperience({page,api,check,nav,close,formSave,out,fs});
+  await verifyStudio({page,api,check,nav,close,formSave,out,fs});
   check(errors.length===0,'Browser exceptions: '+errors.join('; '));
-  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors']},null,2));
+  await fs.writeFile(path.join(out,'browser-results.json'),JSON.stringify({checks,errors,browser:await browser.version(),flows:['setup','showroom','invoice','lost-payment-response','offline-reload','sync','conflict-review','responsive-ui','india-gst','quick-billing','line-returns','client-personalisation','four-sectors','owned-branding','guided-configuration','csv-preview-import','agreed-prices','stock-count','opening-collections','customer-statement','cash-closing','inspection','large-list-rendering']},null,2));
   console.log(JSON.stringify({checks,errors,output:out}));
 }catch(error){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});console.error(error);console.error('PAGE ERRORS',errors);process.exitCode=1;}
 finally{if(process.env.DESK_AGENT_BROWSER)await promisify(execFile)(process.env.DESK_AGENT_BROWSER,['close'],{timeout:10000}).catch(()=>{});await context.close().catch(()=>{});await browser.close();}

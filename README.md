@@ -4,7 +4,7 @@ Business management for India and Nepal's garages, vehicle showrooms, retailers 
 
 The runnable application is in **[business-desk](business-desk/)**. The older React quotation-tool files at the repository root are retained as migration references; they are not the entry point for this release.
 
-**Status: 2.1.0-rc.1 — controlled pilot candidate.** This is not a claim of IRD software approval or completed production acceptance.
+**Status: 2.2.0-rc.1 — controlled pilot candidate.** This is not a claim of IRD software approval or completed production acceptance.
 
 ```sh
 cd business-desk
@@ -24,3 +24,8 @@ GitHub hosts the source and review history. The Python service needs a persisten
 
 - [India/Nepal product research and SaaS rollout](business-desk/docs/INDIA_NEPAL_PRODUCT_RESEARCH.md)
 - [Detailed client discovery questions](business-desk/docs/CLIENT_DISCOVERY_QUESTIONNAIRE.md)
+
+- [Detailed India sector, staff and switching playbook](business-desk/docs/INDIA_MARKET_AND_SWITCHING_PLAYBOOK.md)
+- [Vercel/PostgreSQL deployment candidate and remaining launch gates](business-desk/docs/VERCEL_DEPLOYMENT.md)
+
+This candidate adds business-owned branding, guided configuration, CSV migration, opening collections, agreed prices, cash/stock counts and inspections. The connected Vercel team returns 403, so no live Vercel deployment has been provisioned.

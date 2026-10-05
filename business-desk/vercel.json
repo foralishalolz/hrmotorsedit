@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "python3 deploy/build_vercel.py",
+  "outputDirectory": "public",
+  "regions": ["bom1"],
+  "functions": {"api/index.py": {"maxDuration": 30, "excludeFiles": "{data/**,verification/**,node_modules/**,tests/**,test_*.py,public/**,.venv/**}"}},
+  "headers": [{"source":"/(.*)","headers":[{"key":"X-Content-Type-Options","value":"nosniff"},{"key":"Referrer-Policy","value":"same-origin"},{"key":"Content-Security-Policy","value":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'"}]}],
+  "rewrites": [
+    {"source":"/api/:path*","destination":"/api/index?desk_path=/api/:path*"},
+    {"source":"/print","destination":"/api/index?desk_path=/print"},
+    {"source":"/manifest.webmanifest","destination":"/api/index?desk_path=/manifest.webmanifest"}
+  ]
+}
