@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.15-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DESK_DATA_DIR=/data DESK_BIND=0.0.0.0 PORT=8080
 WORKDIR /app
 COPY requirements.txt requirements-vercel.txt .
